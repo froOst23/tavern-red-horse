@@ -1,0 +1,17 @@
+---
+app:
+  port: "5000"
+  log_level: "dev"
+postgres:
+  host: "postgres_host"
+  port: "5432"
+  dbname: "red_horse_tavern"
+  user: "red_horse"
+  password: "strong_pass"
+  ssl_mode: "disable"
+minio:
+  endpoint: "minio_host:9000"
+  access_key: "strong_key"
+  secret_key: "strong_key"
+  use_ssl: false
+  bucket: "tavern"

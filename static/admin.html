@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>🐎 Таверна "Красная лошадь" - Магическая Админка</title>
+        <link rel="stylesheet" href="/static/admin.css">
+        <link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=MedievalSharp&display=swap" rel="stylesheet">
+    </head>
+    <body>
+        <div class="tavern-sign">
+            <h1>Магическая Админка</h1>
+        </div>
+
+        <div class="scroll-container">
+            <div class="parchment">
+                <h2>🏆 Свиток Команд</h2>
+                <div id="teams-container"></div>
+
+                <div style="display: flex; flex-direction: row; align-items: center; justify-content: space-around;">
+                    <div class="magic-card add-card" id="create-team">
+                        <h3>✨ Призвать команду</h3>
+                        <div class="input-group">
+                            <input type="text" id="new-team-name" class="enchanted-input" placeholder="Начертать имя команды...">
+                            <button id="create-team-btn" class="magic-btn" onclick="createTeam()">
+                                <span class="sparkle">✨</span>
+                                Создать
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: row; align-items: center; justify-content: space-around; margin-bottom: 30px;">
+                    <div class="magic-card current-event-card">
+                        <h3>🎯 Текущее Событие</h3>
+                        <div id="current-event-display">
+                            <div class="no-current-event">Нет активных событий</div>
+                        </div>
+                        <button id="next-event-btn" class="magic-btn next-event-btn" onclick="nextEvent()" disabled>
+                            <span class="sparkle">🔄</span>
+                            Дальше!
+                        </button>
+                    </div>
+                </div>
+
+                <div class="reset-section">
+                    <button id="reset-btn" class="danger-btn ancient" onclick="resetTeams()">
+                        🔥 Перерождение мира
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="scroll-container">
+            <div class="parchment">
+                <h2>🔮 Свиток Событий</h2>
+
+                <div style="display: flex; flex-direction: row; align-items: center; justify-content: space-around;">
+                    <div class="magic-card add-card">
+                        <h3>🌌 Создать событие</h3>
+                        <div class="form-group">
+                            <input type="text" id="new-event-title" class="enchanted-input" placeholder="Имя события...">
+                        </div>
+                        <div class="form-group">
+                            <textarea id="new-event-description" class="enchanted-input event-description" placeholder="Пророчество события..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="file-label">
+                                <input type="file" id="new-event-image" class="file-input" accept="image/*">
+                                📜 Выбрать магический свиток (изображение)
+                            </label>
+                        </div>
+                        <button class="magic-btn" id="create-event-btn">
+                            <span class="sparkle">🌟</span>
+                            Создать
+                        </button>
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: row; align-items: center; justify-content: space-around;">
+                    <div id="events-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="fire-torches">
+            <div class="torch left"></div>
+            <div class="torch right"></div>
+        </div>
+
+        <script src="/static/admin.js"></script>
+    </body>
+</html>
