@@ -11,6 +11,9 @@ FROM scratch AS final
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /build/app /bin/app/app
 COPY --from=builder /build/VERSION /bin/app/VERSION
+COPY --from=builder /build/static /bin/app/static
+
+WORKDIR /bin/app
 
 ENV TZ=Europe/Moscow
 EXPOSE 5000

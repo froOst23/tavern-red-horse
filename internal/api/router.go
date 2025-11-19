@@ -25,7 +25,7 @@ func (a *App) NewRouter() *chi.Mux {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	r.Get("/admin/", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/admin", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./static/admin.html")
 	})
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {

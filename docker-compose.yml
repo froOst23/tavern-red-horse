@@ -1,0 +1,14 @@
+services:
+  red-horse-tavern:
+    build:
+      context: .
+    container_name: "red-horse-tavern"
+    ports:
+      - "5000:5000"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    volumes:
+      - ./application.yaml:/opt/conf/application.yaml
