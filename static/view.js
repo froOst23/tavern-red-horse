@@ -72,6 +72,8 @@ function renderTeamFlask(health, drunk, options = {}) {
                       width="${flaskWidth}" 
                       height="${drunkHeight}"
                       fill="#ffcf40"/>
+                      
+                ${generateBubbles(flaskX, baseY - drunkHeight, flaskWidth, drunkHeight+5)}
             </g>
 
             <!-- КОНТУР КОЛБЫ -->
@@ -104,6 +106,18 @@ function renderTeamFlask(health, drunk, options = {}) {
         svg.classList.add("team-flask-lost");
     }
     return svg;
+}
+
+function generateBubbles(x, y, width, height, count = 50) { // больше пузырьков
+    const circles = [];
+    for (let i = 0; i < count; i++) {
+        const cx = x + Math.random() * width;
+        const cy = y + Math.random() * height;
+        const r = Math.random() * 2 + 1;
+        const opacity = Math.random() * 0.5 + 0.3;
+        circles.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" fill-opacity="${opacity}" />`);
+    }
+    return circles.join('');
 }
 
 function updateConnectionStatus(status, message = '') {
