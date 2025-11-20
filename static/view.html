@@ -1,23 +1,58 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <title>🐎 Таверна "Красная лошадь"</title>
-        <link rel="stylesheet" href="/static/view.css">
-    </head>
-    <body>
-        <div class="connection-status status-connecting" id="connectionStatus">Подключение...</div>
+<head>
+    <meta charset="UTF-8">
+    <title>🐎 Таверна "Красная лошадь"</title>
+    <link rel="stylesheet" href="/static/view.css">
+</head>
+<body>
+<div class="connection-status status-connecting" id="connectionStatus">Подключение...</div>
 
-        <div class="tavern-sign">
-            <h1>Таверна красная лошадь</h1>
+<div class="tavern-sign">
+    <h1>Таверна красная лошадь</h1>
+</div>
+
+<div class="parchment"></div>
+
+<!-- ШАБЛОН КОМАНДЫ -->
+<template id="team-card-template">
+    <div class="team-card">
+        <h2 class="team-name"></h2>
+        <div class="team-svg"></div>
+    </div>
+</template>
+
+<!-- ШАБЛОН АКТИВНОГО СОБЫТИЯ -->
+<template id="active-event-template">
+    <div class="active-event">
+        <div class="active-event-border"></div>
+        <div class="event-image">
+            <img class="event-img" src="" alt="">
         </div>
+        <div class="event-content">
+            <div class="event-title"></div>
+            <div class="event-description"></div>
+        </div>
+    </div>
+</template>
 
-        <div class="parchment"></div>
+<!-- ШАБЛОН ПУСТОГО СОБЫТИЯ -->
+<template id="no-event-template">
+    <div class="no-active-event">🎭 Активных событий нет</div>
+</template>
 
-        <div class="teams-grid" id="teams-container"></div>
+<div class="teams-and-event">
+    <div class="teams-column" id="teams-left"></div>
 
-        <div id="active-event-container"></div>
+    <div class="event-center">
+        <div id="active-event-image"></div>
+    </div>
 
-        <script src="/static/view.js"></script>
-    </body>
+    <div class="teams-column" id="teams-right"></div>
+</div>
+
+<div id="active-event-description"></div>
+
+<script src="/static/view.js"></script>
+</body>
 </html>

@@ -1,6 +1,5 @@
 const maxValue = 20;
 let ws = null;
-let currentActiveEvent = null;
 
 function updateConnectionStatus(status, message = '') {
     const statusElement = document.getElementById('connectionStatus');
@@ -18,43 +17,55 @@ function getStatusMessage(status) {
 }
 
 function displayActiveEvent(events) {
-    const container = document.getElementById('active-event-container');
+    const imgContainer = document.getElementById('active-event-image');
+    const descContainer = document.getElementById('active-event-description');
 
-    // Находим текущее активное событие
-    const activeEvent = events.find(event => event.current);
+    imgContainer.innerHTML = '';
+    descContainer.innerHTML = '';
 
-    if (activeEvent && activeEvent.title !== currentActiveEvent) {
-        currentActiveEvent = activeEvent.title;
+    /**
+     * @typedef {Object} Event
+     * @property {number} id
+     * @property {string} title
+     * @property {string} description
+     * @property {string} type
+     * @property {string} difficult
+     * @property {boolean} current
+     * @property {boolean} init
+     * @property {boolean} used
+     * @property {string} requirement
+     * @property {string} victory_effect
+     * @property {string} defeat_effect
+     * @property {string} image_path
+     * @property {string} created_at
+     */
 
-        let imageHtml = '';
-        if (activeEvent.image_path) {
-            const imageUrl = `/static/events/${activeEvent.image_path}`;
-            imageHtml = `
-                <div class="event-image">
-                    <img src="${imageUrl}" alt="${activeEvent.title}" 
-                         onerror="this.style.display='none'">
-                </div>
-            `;
-        }
+    /** @type {Event|undefined} */
+    const activeEvent = events.find(e => e.current);
 
-        container.innerHTML = `
-            <div class="active-event">
-                <div class="active-event-border"></div>
-                ${imageHtml}
-                <div class="event-content">
-                    <div class="event-title">${activeEvent.title}</div>
-                    ${activeEvent.description ? `<div class="event-description">${activeEvent.description}</div>` : ''}
-                </div>
-            </div>
-        `;
-    } else if (!activeEvent && currentActiveEvent !== null) {
-        currentActiveEvent = null;
-        container.innerHTML = `
-            <div class="no-active-event">
-                🎭 Активных событий нет
+    if (!activeEvent) {
+        descContainer.innerHTML = `<div class="no-event-message">🎭 Активных событий нет</div>`;
+        return;
+    }
+
+    if (activeEvent.image_path) {
+        imgContainer.innerHTML = `
+            <div class="event-image-large">
+                <img src="/static/events/${activeEvent.image_path}" alt="${activeEvent.title}">
             </div>
         `;
     }
+
+    descContainer.innerHTML = `
+        <div class="event-description-bottom">
+            <div class="event-type">
+                <span>${activeEvent.difficult}</span>
+                <span>${activeEvent.type}</span>
+            </div>
+            <div class="event-title-bottom">${activeEvent.title}</div>
+            <div class="event-description-text">${activeEvent.description || ''}</div>
+        </div>
+    `;
 }
 
 async function fetchEvents() {
@@ -63,7 +74,27 @@ async function fetchEvents() {
         if (!res.ok) {
             throw new Error(`HTTP error! status: ${res.status}`);
         }
+
+        /**
+         * @typedef {Object} Event
+         * @property {number} id
+         * @property {string} title
+         * @property {string} description
+         * @property {string} type
+         * @property {string} difficult
+         * @property {boolean} current
+         * @property {boolean} init
+         * @property {boolean} used
+         * @property {string} requirement
+         * @property {string} victory_effect
+         * @property {string} defeat_effect
+         * @property {string} image_path
+         * @property {string} created_at
+         */
+
+        /** @type {Event|undefined} */
         const events = await res.json();
+        console.log('Получены события:', events);
         displayActiveEvent(events);
     } catch (error) {
         console.error('Error fetching events:', error);
@@ -132,120 +163,126 @@ function connectWebSocket() {
 async function fetchTeams() {
     try {
         const res = await fetch('/viewer/teams');
-        if (!res.ok) {
-            throw new Error(`HTTP error! status: ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const teams = await res.json();
 
         const container = document.getElementById('teams-container');
-        container.innerHTML = '';
+        const tplTeam = document.getElementById('team-card-template');
 
-        if (!teams || teams.length === 0) {
-            container.innerHTML = '<div class="team-card"><h2>Нет команд</h2></div>';
+        const left = document.getElementById('teams-left');
+        const right = document.getElementById('teams-right');
+
+        left.innerHTML = '';
+        right.innerHTML = '';
+
+        if (!teams?.length) {
+            const emptyCard = tplTeam.content.cloneNode(true);
+            emptyCard.querySelector('.team-name').textContent = 'Нет команд';
+            container.appendChild(emptyCard);
             return;
         }
 
-        teams.forEach(t => {
-            const card = document.createElement('div');
-            card.className = 'team-card';
 
-            const name = document.createElement('h2');
-            name.textContent = t.name;
-            name.style.textAlign = "center";
-            card.appendChild(name);
+        teams.forEach((t, i) => {
+            const card = tplTeam.content.cloneNode(true);
+            card.querySelector('.team-name').textContent = t.name;
+            card.querySelector('.team-svg').appendChild(renderGameScore(t.health, t.drunk));
 
-            const svgNS = "http://www.w3.org/2000/svg";
-            const svg = document.createElementNS(svgNS, "svg");
-
-            svg.setAttribute("viewBox", "0 0 600 265");
-            svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-            svg.style.margin = "10px 0";
-
-            const cx = 300;
-            const cy = 130;
-            const rx = 260;
-            const ry = 100;
-
-            const ovalPosition = (angle) => {
-                const rad = (angle - 375) * Math.PI / 70;
-                return {
-                    x: cx + rx * Math.cos(rad),
-                    y: cy + ry * Math.sin(rad)
-                };
-            };
-
-            const centerGroup = document.createElementNS(svgNS, "g");
-
-            const separator = document.createElementNS(svgNS, "text");
-            separator.setAttribute("x", cx);
-            separator.setAttribute("y", cy - 5);
-            separator.setAttribute("text-anchor", "middle");
-            separator.setAttribute("font-size", "20");
-            separator.setAttribute("fill", "#5D4037");
-            separator.textContent = `Жизнь ${t.health} | ${t.drunk} Опьянение`;
-            centerGroup.appendChild(separator);
-
-            svg.appendChild(centerGroup);
-
-            for (let i = 0; i <= maxValue; i++) {
-                const angle = 210 + (i / maxValue) * 120;
-                const pos = ovalPosition(angle);
-
-                const text = document.createElementNS(svgNS, "text");
-                text.setAttribute("x", pos.x);
-                text.setAttribute("y", pos.y + 3);
-                text.setAttribute("text-anchor", "middle");
-                text.setAttribute("font-size", "26");
-                text.setAttribute("font-weight", "bold");
-                text.setAttribute("fill", "#5D4037");
-                text.textContent = i;
-                svg.appendChild(text);
-            }
-
-            const healthAngle = 210 + (t.health / maxValue) * 120;
-            const healthPos = ovalPosition(healthAngle);
-
-            const healthCircle = document.createElementNS(svgNS, "circle");
-            healthCircle.setAttribute("cx", healthPos.x);
-            healthCircle.setAttribute("cy", healthPos.y-6);
-            healthCircle.setAttribute("r", 25);
-            healthCircle.setAttribute("fill", "none");
-            healthCircle.setAttribute("stroke", "#DC2626");
-            healthCircle.setAttribute("stroke-width", "6");
-            svg.appendChild(healthCircle);
-
-            const drunkAngle = 210 + (t.drunk / maxValue) * 120;
-            const drunkPos = ovalPosition(drunkAngle);
-
-            const drunkCircle = document.createElementNS(svgNS, "circle");
-            drunkCircle.setAttribute("cx", drunkPos.x);
-            drunkCircle.setAttribute("cy", drunkPos.y-6);
-            drunkCircle.setAttribute("r", 25);
-            drunkCircle.setAttribute("fill", "none");
-            drunkCircle.setAttribute("stroke", "#2563EB");
-            drunkCircle.setAttribute("stroke-width", "4");
-            svg.appendChild(drunkCircle);
-
-            if (t.health === t.drunk) {
-                const warning = document.createElementNS(svgNS, "text");
-                warning.setAttribute("x", cx);
-                warning.setAttribute("y", 190);
-                warning.setAttribute("text-anchor", "middle");
-                warning.setAttribute("font-size", "16");
-                warning.setAttribute("font-weight", "bold");
-                warning.setAttribute("fill", "#DC2626");
-                warning.textContent = "⚡ КОМАНДА ПРОИГРАЛА! ⚡";
-                svg.appendChild(warning);
-            }
-
-            card.appendChild(svg);
-            container.appendChild(card);
+            if (i % 2 === 0) left.appendChild(card);
+            else right.appendChild(card);
         });
+
     } catch (error) {
         console.error('Error fetching teams:', error);
         const container = document.getElementById('teams-container');
-        container.innerHTML = '<div class="team-card"><h2>Ошибка загрузки данных</h2><p>Попробуйте обновить страницу</p></div>';
+        const tplTeam = document.getElementById('team-card-template');
+        const errorCard = tplTeam.content.cloneNode(true);
+
+        errorCard.querySelector('.team-name').textContent = 'Ошибка загрузки';
+        container.innerHTML = '';
+        container.appendChild(errorCard);
     }
+}
+
+function renderGameScore(health, drunk) {
+    const svgNS = "http://www.w3.org/2000/svg";
+
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 600 265");
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    svg.style.margin = "10px 0";
+
+    const cx = 300, cy = 130, rx = 260, ry = 100;
+    const ovalPosition = angle => {
+        const rad = (angle - 375) * Math.PI / 70;
+        return { x: cx + rx * Math.cos(rad), y: cy + ry * Math.sin(rad) };
+    };
+
+    const centerGroup = document.createElementNS(svgNS, "g");
+
+    const separator = document.createElementNS(svgNS, "text");
+    separator.setAttribute("x", cx);
+    separator.setAttribute("y", cy - 5);
+    separator.setAttribute("text-anchor", "middle");
+    separator.setAttribute("font-size", "20");
+    separator.setAttribute("fill", "#5D4037");
+    separator.textContent = `Здоровье ${health} | ${drunk} Опьянение`;
+    centerGroup.appendChild(separator);
+
+    svg.appendChild(centerGroup);
+
+    for (let i = 0; i <= maxValue; i++) {
+        const angle = 210 + (i / maxValue) * 120;
+        const pos = ovalPosition(angle);
+
+        const text = document.createElementNS(svgNS, "text");
+        text.setAttribute("x", pos.x);
+        text.setAttribute("y", pos.y + 3);
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("font-size", "26");
+        text.setAttribute("font-weight", "bold");
+        text.setAttribute("fill", "#5D4037");
+        text.textContent = i;
+        svg.appendChild(text);
+    }
+
+    const healthAngle = 210 + (health / maxValue) * 120;
+    const hp = ovalPosition(healthAngle);
+
+    const healthCircle = document.createElementNS(svgNS, "circle");
+    healthCircle.setAttribute("cx", hp.x);
+    healthCircle.setAttribute("cy", hp.y - 6);
+    healthCircle.setAttribute("r", 25);
+    healthCircle.setAttribute("fill", "none");
+    healthCircle.setAttribute("stroke", "#DC2626");
+    healthCircle.setAttribute("stroke-width", "6");
+    svg.appendChild(healthCircle);
+
+    const drunkAngle = 210 + (drunk / maxValue) * 120;
+    const dp = ovalPosition(drunkAngle);
+
+    const drunkCircle = document.createElementNS(svgNS, "circle");
+    drunkCircle.setAttribute("cx", dp.x);
+    drunkCircle.setAttribute("cy", dp.y - 6);
+    drunkCircle.setAttribute("r", 25);
+    drunkCircle.setAttribute("fill", "none");
+    drunkCircle.setAttribute("stroke", "#2563EB");
+    drunkCircle.setAttribute("stroke-width", "4");
+    svg.appendChild(drunkCircle);
+
+    if (health === drunk) {
+        const warning = document.createElementNS(svgNS, "text");
+        warning.setAttribute("x", cx);
+        warning.setAttribute("y", 190);
+        warning.setAttribute("text-anchor", "middle");
+        warning.setAttribute("font-size", "16");
+        warning.setAttribute("font-weight", "bold");
+        warning.setAttribute("fill", "#DC2626");
+        warning.textContent = "⚡ КОМАНДА ПРОИГРАЛА! ⚡";
+        svg.appendChild(warning);
+    }
+
+    return svg;
 }
 
 window.onload = function() {

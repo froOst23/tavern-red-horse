@@ -1,0 +1,139 @@
+@media (max-width: 1200px) {
+    #events-container {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    #teams-container,
+    #events-container,
+    .magic-card{
+        flex-direction: column;
+        align-items: center;
+    }
+
+    body {
+        padding: 5px;
+        border: 5px solid transparent;
+    }
+
+    .parchment {
+        padding: 5px;
+    }
+
+    .current-event-card {
+        width: 100%;
+    }
+
+    .current-event-card,
+    .magic-card,
+    .event-card {
+        margin: 10px;
+        padding: 15px;
+        border-radius: 15px;
+        border: 3px solid var(--wood)
+    }
+
+    .team-card{
+        margin: 10px;
+        padding: 15px;
+    }
+
+    .input-group {
+        flex-direction: column;
+    }
+
+    #events-container {
+        grid-template-columns: 1fr;
+    }
+
+    .event-card {
+        min-height: 50px;
+        padding: 15px;
+    }
+
+    .current-event-card {
+        min-height: 50px;
+        padding: 15px;
+        font-size: 14px;
+    }
+
+    .reset-section {
+        padding-bottom: 20px;
+        padding-top: 15px;
+    }
+
+    .event-card h3 {
+        font-size: 12px;
+    }
+
+    .event-info {
+        font-size: 10px;
+    }
+
+    .delete-crystal-btn {
+        top: -15px;
+        right: -15px;
+        width: 45px;
+        height: 45px;
+        font-size: 20px;
+    }
+
+    .magic-message {
+        font-size: 12px;
+    }
+
+    .current-indicator {
+        top: -15px;
+        font-size: 10px;
+    }
+
+    .current-init-indicator {
+        top: -15px;
+        font-size: 10px;
+    }
+
+    .magic-btn {
+        width: 100%;
+        margin: -5px;
+        height: 36px;
+        font-size: 12px;
+    }
+
+    .file-label {
+        font-size: 12px;
+    }
+
+    .edit-event-modal-dialog {
+        padding: 0;
+    }
+
+    .magic-edit-dialog {
+        padding: 15px;
+    }
+
+    .edit-event-modal {
+        padding: 2px;
+    }
+
+    .magic-btn {
+        padding: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .magic-btn {
+        width: 100%;
+        margin: -5px;
+        height: 36px;
+        font-size: 12px;
+    }
+
+    .stats-container {
+        flex-direction: column;
+    }
+
+    .torch {
+        display: none;
+    }
+}

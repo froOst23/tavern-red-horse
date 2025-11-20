@@ -15,7 +15,7 @@
 }
 
 body {
-    font-family: 'MedievalSharp', cursive;
+    font-family: 'Verdana', cursive;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -45,7 +45,6 @@ body::before {
 
 /* Типография */
 h1 {
-    font-family: 'UnifrakturMaguntia', cursive;
     color: var(--secondary-color);
     text-shadow: 0 0 10px var(--primary-color),
     0 0 20px var(--primary-color),
@@ -76,9 +75,10 @@ h2::after {
 h3 {
     text-align: center;
     color: #5D4037;
-    font-size: clamp(1.3rem, 3vw, 1.6rem);
+    font-size: 18px;
     font-weight: bold;
     text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    margin: 10px;
 }
 
 /* Компоненты */
@@ -178,7 +178,6 @@ h3 {
     border: 2px solid var(--wood);
     background: rgba(255, 255, 255, 0.9);
     font-size: 16px;
-    font-family: 'MedievalSharp', cursive;
     text-align: center;
     resize: vertical;
     transition: all 0.3s ease;
@@ -223,7 +222,6 @@ h3 {
     color: var(--secondary-color);
     font-weight: bold;
     cursor: pointer;
-    font-family: 'MedievalSharp', cursive;
     font-size: 16px;
     margin: 8px;
     transition: all 0.3s ease;
@@ -247,7 +245,6 @@ h3 {
     box-shadow: 0 4px 8px rgba(139, 0, 0, 0.4) !important;
     cursor: pointer;
     font-size: 16px;
-    font-family: 'MedievalSharp', cursive;
 }
 
 .danger-btn:hover {
@@ -306,6 +303,14 @@ h3 {
 }
 
 /* События */
+.event-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-around;
+    margin-bottom: 30px;
+}
+
 .event-card {
     background: linear-gradient(135deg, #e8f4f8, #bbdefb);
     border: 3px solid #1976d2;
@@ -315,6 +320,7 @@ h3 {
     align-content: center;
     transition: all 0.3s ease;
     align-items: baseline;
+    cursor: pointer;
 }
 
 .event-card h3 {
@@ -381,6 +387,10 @@ h3 {
     justify-content: center;
     font-size: 20px;
     box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+.add-card h3 {
+    margin-bottom: 15px;
 }
 
 .ancient {
@@ -490,66 +500,7 @@ h3 {
     animation: torch-flicker 2s infinite alternate;
 }
 
-/* Адаптивность */
-@media (max-width: 1200px) {
-    #events-container {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
 
-@media (max-width: 768px) {
-    #teams-container,
-    #events-container {
-        flex-direction: column;
-        align-items: center;
-    }
-
-    .parchment {
-        padding: 20px;
-    }
-
-    .input-group {
-        flex-direction: column;
-    }
-
-    #events-container {
-        grid-template-columns: 1fr;
-    }
-
-    .event-card {
-        min-height: 100px;
-        padding: 15px;
-    }
-
-    .event-card h3 {
-        font-size: 1.1rem;
-    }
-
-    .delete-crystal-btn {
-        top: -15px;
-        right: -15px;
-        width: 45px;
-        height: 45px;
-        font-size: 20px;
-    }
-}
-
-@media (max-width: 480px) {
-    .magic-btn {
-        width: 100%;
-        margin: 5px 0;
-    }
-
-    .stats-container {
-        flex-direction: column;
-    }
-
-    .torch {
-        display: none;
-    }
-}
-
-/* admin.css - добавляем стили для текущего события */
 .current-event-card {
     background: linear-gradient(135deg, #fff8e1, #ffecb3);
     border: 3px solid var(--wood);
@@ -558,6 +509,10 @@ h3 {
     margin-right: -20px;
     padding-left: 20px;
     padding-right: 20px;
+    width: 80%;
+    border-radius: 15px;
+    align-items: center;
+    text-align: center;
 }
 
 .current-event-card::before {
@@ -588,6 +543,28 @@ h3 {
     font-weight: bold;
     margin-bottom: 10px;
     text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+.event-title {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.event-title h3 {
+    text-align: left;
+    flex: 1;
+    margin: 0;
+}
+
+.event-info {
+    font-size: 12px;
+    color: #666;
+    text-align: left;
+    flex-shrink: 0;
+    margin-right: 15px;
 }
 
 .current-event-description {
@@ -626,6 +603,22 @@ h3 {
 .next-event-btn:hover {
     background: linear-gradient(135deg, #8B0000, #c41e3a) !important;
     transform: translateY(-2px);
+}
+
+.current-init-indicator {
+    position: absolute;
+    top: -10px;
+    left: 20%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #1871cd, #035cb6);
+    color: #ffd700;
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 0.8em;
+    font-weight: bold;
+    border: 2px solid #ffd700;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    z-index: 5;
 }
 
 .current-indicator {

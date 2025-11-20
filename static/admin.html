@@ -5,6 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>🐎 Таверна "Красная лошадь" - Магическая Админка</title>
         <link rel="stylesheet" href="/static/admin.css">
+        <link rel="stylesheet" href="/static/admin-adaptive.css">
         <link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=MedievalSharp&display=swap" rel="stylesheet">
     </head>
     <body>
@@ -30,16 +31,18 @@
                     </div>
                 </div>
 
-                <div style="display: flex; flex-direction: row; align-items: center; justify-content: space-around; margin-bottom: 30px;">
-                    <div class="magic-card current-event-card">
+                <div class="event-container">
+                    <div class="current-event-card">
                         <h3>🎯 Текущее Событие</h3>
                         <div id="current-event-display">
                             <div class="no-current-event">Нет активных событий</div>
                         </div>
-                        <button id="next-event-btn" class="magic-btn next-event-btn" onclick="nextEvent()" disabled>
-                            <span class="sparkle">🔄</span>
-                            Дальше!
-                        </button>
+                        <div>
+                            <button id="next-event-btn" class="magic-btn next-event-btn" onclick="nextEvent()" disabled>
+                                <span class="sparkle">🔄</span>
+                                Дальше!
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -59,16 +62,43 @@
                     <div class="magic-card add-card">
                         <h3>🌌 Создать событие</h3>
                         <div class="form-group">
+                            <label for="new-event-title"></label>
                             <input type="text" id="new-event-title" class="enchanted-input" placeholder="Имя события...">
                         </div>
                         <div class="form-group">
+                            <label for="new-event-description"></label>
                             <textarea id="new-event-description" class="enchanted-input event-description" placeholder="Пророчество события..."></textarea>
                         </div>
                         <div class="form-group">
-                            <label class="file-label">
-                                <input type="file" id="new-event-image" class="file-input" accept="image/*">
+                            <label for="new-event-type"></label>
+                            <input type="text" id="new-event-type" class="enchanted-input" placeholder="Тип события...">
+                        </div>
+                        <div class="form-group">
+                            <label for="new-event-difficulty"></label>
+                            <input id="new-event-difficulty" class="enchanted-input event-description" placeholder="Сложность события...">
+                        </div>
+                        <div class="form-group">
+                            <label for="new-event-victory-effect"></label>
+                            <textarea id="new-event-victory-effect" class="enchanted-input event-description" placeholder="Эффект победы..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="new-event-defeat-effect"></label>
+                            <textarea id="new-event-defeat-effect" class="enchanted-input event-description" placeholder="Эффект поражения..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="new-event-requirement"></label>
+                            <textarea id="new-event-requirement" class="enchanted-input event-description" placeholder="Зависимость для события..."></textarea>
+                        </div>
+                        <label class="file-label">
+                            <input type="checkbox" id="new-event-init">
+                            Начальная карта
+                        </label>
+                        <div class="form-group">
+                            <label class="file-label" for="new-event-image">
                                 📜 Выбрать магический свиток (изображение)
                             </label>
+                            <div id="file-name" ></div>
+                            <input type="file" id="new-event-image" class="file-input" accept="image/*">
                         </div>
                         <button class="magic-btn" id="create-event-btn">
                             <span class="sparkle">🌟</span>
@@ -90,3 +120,16 @@
         <script src="/static/admin.js"></script>
     </body>
 </html>
+
+<script>
+    const fileInput = document.getElementById('new-event-image');
+    const fileNameDisplay = document.getElementById('file-name');
+
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) {
+            fileNameDisplay.textContent = `Выбран файл: ${fileInput.files[0].name}`;
+        } else {
+            fileNameDisplay.textContent = '';
+        }
+    });
+</script>
