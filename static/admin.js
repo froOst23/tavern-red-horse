@@ -1,7 +1,7 @@
 // admin.js
 // Константы
-const MAX_HEALTH = 20;
-const MAX_DRUNK = 20;
+const MAX_HEALTH = 40;
+const MAX_DRUNK = 40;
 const MIN_VALUE = 0;
 const MAX_TEAMS = 2;
 

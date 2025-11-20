@@ -1,5 +1,5 @@
 /* =========================
-    ГЛАВНЫЕ НАСТРОЙКИ
+    ГЛАВНЫЕ НАСТРОЙКИ ДЛЯ ПРОЕКТОРА
 ========================= */
 * {
     box-sizing: border-box;
@@ -13,9 +13,6 @@
     --accent-red: #c41e3a;
     --card-bg: #f4e4bc;
     --wood: #8B4513;
-
-    --team-width: 35vw;     /* Левая и правая колонка */
-    --event-width: 46vw;    /* Центральный блок */
 }
 
 /* Общий фон */
@@ -26,83 +23,120 @@ body {
     flex-direction: column;
     align-items: center;
     min-height: 100vh;
-    gap: 20px;
     overflow-x: hidden;
-    padding: 20px;
+    padding: 10px;
     color: white;
 }
 
 /* =========================
     ЗАГОЛОВОК
 ========================= */
-h1 {
-    font-size: 3vw;
+.tavern-sign h1 {
+    font-size: 2.5vw;
     color: var(--gold);
     text-shadow: 0 0 12px var(--accent-red);
-    letter-spacing: 2px;
+    letter-spacing: 1px;
     margin-bottom: 15px;
+    text-align: center;
 }
 
 /* =========================
-    ГЛАВНЫЙ КОНТЕЙНЕР
+    ОСНОВНОЙ МАКЕТ
 ========================= */
-.teams-and-event {
+.main-layout {
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
     align-items: flex-start;
     width: 100%;
-    gap: 2vw;
-    padding-top: 10px;
+    max-width: 95vw;
+    height: 85vh;
+    gap: 1vw;
 }
 
 /* =========================
-    КОМАНДЫ (лево/право)
+    КОЛОНКИ КОМАНД (НА ВСЮ ВЫСОТУ)
 ========================= */
 .teams-column {
-    width: var(--team-width);
+    flex: 1;
     display: flex;
     flex-direction: column;
     gap: 2vh;
+    max-width: 30%;
+    height: 100%;
+    overflow-y: auto;
+    justify-content: flex-start;
 }
 
 .team-card {
-    background: var(--card-bg);
-    border: 4px solid var(--gold);
-    border-radius: 18px;
+    /*background: var(--card-bg);*/
+    /*border: 3px solid var(--gold);*/
+    /*border-radius: 12px;*/
     padding: 2vh 1vw;
     text-align: center;
-    box-shadow: 0 0 20px rgba(0,0,0,0.6);
+    /*box-shadow: 0 0 15px rgba(0,0,0,0.6);*/
+    margin-bottom: 15px;
+    min-height: 220px; /* Минимальная высота для каждой карточки */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
 .team-card h2 {
-    color: #4e2a09;
-    font-size: 1.5vw;
-    margin-bottom: 1vh;
+    color: #ffd700;
+    font-size: 1.6vw;
+    margin-bottom: 1.5vh;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
 }
 
-/* SVG масштабируется */
+.team-svg {
+    width: 100%;
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 160px;
+}
+
 .team-svg svg {
     width: 100%;
-    height: auto;
+    /*max-width: 200px;*/
+    height: 90%;
+    /*max-height: 180px;*/
 }
 
 /* =========================
-    ЦЕНТР — СОБЫТИЕ
+    ЦЕНТР - СОБЫТИЕ (вертикальный стек)
 ========================= */
 .event-center {
-    width: var(--event-width);
+    flex: 1.4;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    max-width: 40%;
+    height: 100%;
+    gap: 2vh;
 }
 
-/* Огромная картинка события */
+/* КАРТИНКА СОБЫТИЯ */
+#active-event-image {
+    width: 100%;
+    height: 60%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
 .event-image-large {
     width: 100%;
-    height: 42vh;
+    height: 100%;
     background: black;
-    border: 4px solid var(--gold);
-    border-radius: 20px;
-    box-shadow: 0 0 25px rgba(0,0,0,0.8);
+    border: 3px solid var(--gold);
+    border-radius: 15px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.8);
     overflow: hidden;
     display: flex;
     justify-content: center;
@@ -115,68 +149,132 @@ h1 {
     object-fit: contain;
 }
 
-/* =========================
-    НИЖНЕЕ ОПИСАНИЕ
-========================= */
+/* ОПИСАНИЕ СОБЫТИЯ */
 #active-event-description {
-    width: 90%;
-    max-width: 1600px;
-    position: relative;
-    margin-top: 30px;
+    width: 100%;
+    height: 35%;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+.event-description-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
 }
 
 .event-description-bottom {
-    margin-top: 20px;
-    padding: 25px;
-    border: 4px solid var(--gold);
+    width: 100%;
+    height: 100%;
+    padding: 20px;
+    border: 3px solid var(--gold);
     border-radius: 15px;
     background: linear-gradient(135deg, #7a3e10, #9b5522);
-    box-shadow: 0 0 25px rgba(0,0,0,0.6);
+    box-shadow: 0 0 20px rgba(0,0,0,0.6);
     text-align: center;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1vh;
 }
 
 .event-title-bottom {
-    font-size: 2vw;
+    font-size: 1.8vw;
     font-weight: bold;
     color: var(--gold);
-    margin-bottom: 1vh;
+    margin-bottom: 0.5vh;
 }
 
 .event-description-text {
     font-size: 1.2vw;
     line-height: 1.4;
     color: #f4e4bc;
-}
-
-/* =========================
-    ОТСУТСТВИЕ СОБЫТИЙ
-========================= */
-.no-event-message {
-    background: #3a3a3a;
-    color: #dcdcdc;
-    padding: 20px;
-    margin-top: 20px;
-    font-size: 2vw;
-    border-radius: 15px;
-    text-align: center;
+    max-height: 60%;
+    overflow-y: auto;
 }
 
 .event-type {
     position: absolute;
-    top: -20px;
+    top: -15px;
     left: 50%;
     transform: translateX(-50%);
     background: linear-gradient(135deg, #ffd700, #ffed4e);
     color: #8B4513;
-    padding: 6px 20px;
-    border-radius: 20px;
-    font-size: 1.1vw;
+    padding: 5px 20px;
+    border-radius: 15px;
+    font-size: 1vw;
     font-weight: bold;
     border: 2px solid #8B4513;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
     z-index: 10;
     white-space: nowrap;
     min-width: 120px;
     text-align: center;
+}
+
+/* =========================
+    СТАТУС ПОДКЛЮЧЕНИЯ
+========================= */
+.connection-status {
+    position: fixed;
+    top: 5px;
+    right: 5px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 0.8vw;
+    z-index: 1000;
+}
+
+.status-connected { background: green; color: white; }
+.status-connecting { background: orange; color: white; }
+.status-disconnected { background: red; color: white; }
+
+/* =========================
+    ЭФФЕКТ ПРОИГРЫША
+========================= */
+.team-flask-lost {
+    filter: drop-shadow(0 0 10px red);
+    animation: pulse-alert 1.5s infinite;
+}
+
+@keyframes pulse-alert {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+/* =========================
+    СКРОЛЛБАРЫ
+========================= */
+.teams-column::-webkit-scrollbar {
+    width: 8px;
+}
+
+.teams-column::-webkit-scrollbar-track {
+    background: #2a1a1a;
+    border-radius: 4px;
+}
+
+.teams-column::-webkit-scrollbar-thumb {
+    background: var(--gold);
+    border-radius: 4px;
+}
+
+.event-description-text::-webkit-scrollbar {
+    width: 6px;
+}
+
+.event-description-text::-webkit-scrollbar-track {
+    background: #5a3a2a;
+    border-radius: 3px;
+}
+
+.event-description-text::-webkit-scrollbar-thumb {
+    background: var(--gold);
+    border-radius: 3px;
 }

@@ -12,8 +12,6 @@
     <h1>Таверна красная лошадь</h1>
 </div>
 
-<div class="parchment"></div>
-
 <!-- ШАБЛОН КОМАНДЫ -->
 <template id="team-card-template">
     <div class="team-card">
@@ -22,36 +20,20 @@
     </div>
 </template>
 
-<!-- ШАБЛОН АКТИВНОГО СОБЫТИЯ -->
-<template id="active-event-template">
-    <div class="active-event">
-        <div class="active-event-border"></div>
-        <div class="event-image">
-            <img class="event-img" src="" alt="">
-        </div>
-        <div class="event-content">
-            <div class="event-title"></div>
-            <div class="event-description"></div>
-        </div>
-    </div>
-</template>
-
-<!-- ШАБЛОН ПУСТОГО СОБЫТИЯ -->
-<template id="no-event-template">
-    <div class="no-active-event">🎭 Активных событий нет</div>
-</template>
-
-<div class="teams-and-event">
+<!-- ОСНОВНОЙ МАКЕТ -->
+<div class="main-layout">
+    <!-- ЛЕВАЯ КОЛОНКА - КОМАНДЫ -->
     <div class="teams-column" id="teams-left"></div>
 
+    <!-- ЦЕНТР - СОБЫТИЕ -->
     <div class="event-center">
         <div id="active-event-image"></div>
+        <div id="active-event-description"></div>
     </div>
 
+    <!-- ПРАВАЯ КОЛОНКА - КОМАНДЫ -->
     <div class="teams-column" id="teams-right"></div>
 </div>
-
-<div id="active-event-description"></div>
 
 <script src="/static/view.js"></script>
 </body>

@@ -1,5 +1,110 @@
-const maxValue = 20;
+const maxValue = 40;
 let ws = null;
+
+function renderTeamFlask(health, drunk, options = {}) {
+    const MAX = 40;
+
+    // clamp
+    health = Math.max(0, Math.min(MAX, health));
+    drunk = Math.max(0, Math.min(MAX, drunk));
+
+    const {
+        scale = 3,
+        svgWidth = 150,
+        svgHeight = 700
+    } = options;
+
+    const healthPercent = health / MAX;
+    const drunkPercent = drunk / MAX;
+
+    const H = 300 * scale + 85;
+    const baseY = 320 * scale + 85;
+
+    const healthHeight = healthPercent * H;
+    const drunkHeight = drunkPercent * H;
+
+    // Расчет размеров с учетом масштаба
+    const flaskX = 45 * scale;
+    const flaskY = 15 * scale;
+    const flaskWidth = 90 * scale;
+    const flaskHeight = 350 * scale + 85;
+    const borderRadius = 40 * scale;
+    const strokeWidth = 5 * scale;
+
+    const template = document.createElement("div");
+
+    template.innerHTML = `
+        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg" class="team-flask-svg">
+        
+            <defs>
+                <clipPath id="flask-clip">
+                    <rect x="${flaskX}" y="${flaskY}" width="${flaskWidth}" height="${flaskHeight}" rx="${borderRadius}" ry="${borderRadius}"></rect>
+                </clipPath>
+        
+                <linearGradient id="glassGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="rgba(255,255,255,0.35)" />
+                    <stop offset="40%" stop-color="rgba(255,255,255,0.05)" />
+                    <stop offset="100%" stop-color="rgba(255,255,255,0.35)" />
+                </linearGradient>
+            </defs>
+        
+            <g clip-path="url(#flask-clip)">
+                <!-- Желтый фон (на всю высоту) -->
+                <rect class="beer-liquid-2"
+                      x="${flaskX}" 
+                      y="${baseY}" 
+                      width="${flaskWidth}" 
+                      height="${320 * scale}"
+                      fill="#ffcf40"/>
+                      
+                <!-- КРАСНАЯ ЖИДКОСТЬ -->
+                <rect class="health-liquid"
+                      x="${flaskX}" 
+                      y="${baseY - healthHeight}" 
+                      width="${flaskWidth}" 
+                      height="${healthHeight}"
+                      fill="#c41e3a"/>
+
+                <!-- ЖЕЛТАЯ ЖИДКОСТЬ -->
+                <rect class="beer-liquid"
+                      x="${flaskX}" 
+                      y="${baseY - drunkHeight}" 
+                      width="${flaskWidth}" 
+                      height="${drunkHeight}"
+                      fill="#ffcf40"/>
+            </g>
+
+            <!-- КОНТУР КОЛБЫ -->
+            <rect x="${flaskX}" y="${flaskY}" width="${flaskWidth}" height="${flaskHeight}" rx="${borderRadius}" ry="${borderRadius}"
+                  fill="url(#glassGradient)" stroke="#e6e6e6" stroke-width="${strokeWidth}"/>
+
+            <!-- ЛИНЕЙКА СЛЕВА -->
+            <g stroke="#ffffffaa" stroke-width="${2 * scale}">
+                ${Array.from({ length: MAX + 1 }).map((_, i) => {
+        const y = baseY - (i * (H / MAX));
+        // Рисуем риски слева от колбы
+        return `<line x1="${5 * scale}" y1="${y}" x2="${25 * scale}" y2="${y}"/>`;
+    }).join('')}
+            </g>
+
+            <!-- ЦИФРЫ НАПРОТИВ РИСОК СЛЕВА -->
+            <g fill="#ffffffcc" font-size="${10 * scale}" font-family="Georgia" text-anchor="middle">
+                ${Array.from({ length: MAX + 1 }).map((_, i) => {
+        const y = baseY + (3 * scale) - (i * (H / MAX));
+        // Цифры слева, напротив рисок
+        return `<text x="${0.1 * scale -5}" y="${y}">${i}</text>`;
+    }).join('')}
+            </g>
+
+        </svg>
+    `;
+
+    const svg = template.firstElementChild;
+    if (health === drunk) {
+        svg.classList.add("team-flask-lost");
+    }
+    return svg;
+}
 
 function updateConnectionStatus(status, message = '') {
     const statusElement = document.getElementById('connectionStatus');
@@ -186,7 +291,15 @@ async function fetchTeams() {
         teams.forEach((t, i) => {
             const card = tplTeam.content.cloneNode(true);
             card.querySelector('.team-name').textContent = t.name;
-            card.querySelector('.team-svg').appendChild(renderGameScore(t.health, t.drunk));
+
+            // Высокие колбы на всю высоту
+            const flaskSvg = renderTeamFlask(t.health, t.drunk, {
+                scale: 0.8,
+                svgWidth: 160,
+                svgHeight: 380
+            });
+
+            card.querySelector('.team-svg').appendChild(flaskSvg);
 
             if (i % 2 === 0) left.appendChild(card);
             else right.appendChild(card);

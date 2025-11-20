@@ -210,7 +210,7 @@ func (a *App) CreateTeam(w http.ResponseWriter, r *http.Request) {
 
 	_, err := a.DB.Exec(r.Context(), `
 		INSERT INTO teams (name, health, drunk, updated_at)
-		VALUES ($1, 20, 0, NOW())
+		VALUES ($1, 40, 0, NOW())
 	`, body.Name)
 	if err != nil {
 		http.Error(w, "failed to create team: "+err.Error(), http.StatusInternalServerError)
@@ -337,7 +337,7 @@ func (a *App) UpdateTeamDrunk(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) ResetTeams(w http.ResponseWriter, r *http.Request) {
-	const defaultHealth = 20
+	const defaultHealth = 40
 	const defaultDrunk = 0
 
 	// Сбрасываем команды
