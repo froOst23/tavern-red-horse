@@ -8,11 +8,32 @@ const MAX_TEAMS = 2;
 // Глобальные переменные
 let eventsStatus = {};
 let ws = null;
+/**
+ * @typedef {Object} Player
+ * @property {name} name
+ * @property {team_id} team_id
+ * @property {team_name} team_name
+ * @property {has_moved} has_moved
+ * @property {team_id} team_id
+ */
+
+/** @type {Player|undefined} */
+let players = [];
+
+/**
+ * @typedef {Object} Round
+ * @property {current_round} current_round
+ */
+
+/** @type {Round|undefined} */
+let round
 
 // ==================== ИНИЦИАЛИЗАЦИЯ ====================
-window.onload = () => {
-    fetchTeams();
-    fetchEvents();
+window.onload = async () => {
+    await fetchPlayers();
+    await fetchTeams();
+    await fetchGameRound();
+    await fetchEvents();
     setupEventListeners();
     connectWebSocket();
 };
@@ -97,7 +118,55 @@ async function fetchTeams() {
     }
 }
 
+async function fetchGameRound() {
+    try {
+        const r = await fetch('/api/admin/game')
+        round = await r.json();
+
+        renderGameRound(round);
+    } catch (error) {
+        console.error('Ошибка загрузки раундов:', error);
+    }
+}
+
+async function fetchPlayers() {
+    try {
+        const res = await fetch('/api/admin/players');
+        players = await res.json();
+        if (!Array.isArray(players)) players = [];
+        renderTeams(window.lastTeams || []);
+
+        renderActivePlayer(players);
+    } catch (err) {
+        console.error('Ошибка загрузки игроков:', err);
+        players = [];
+    }
+}
+
+function renderActivePlayer(player) {
+    const container = document.getElementById('active-player');
+    const currentPlayer = players.find(p => p.is_current);
+
+    container.innerHTML = `
+        <span class="active-player">
+            Сейчас ходит: ${currentPlayer.name}
+        </span> 
+    `;
+}
+
+function renderGameRound(round) {
+    const container = document.getElementById('game-round');
+
+    container.innerHTML = `
+        <span class="active-player">
+            Раунд: ${round.current_round}
+        </span> 
+    `;
+}
+
 function renderTeams(teams) {
+    window.lastTeams = teams;
+
     const container = document.getElementById('teams-container');
     container.innerHTML = '';
 
@@ -159,7 +228,104 @@ function createTeamCard(team) {
         </div>
     `;
 
+    const teamPlayers = players.filter(p => p.team_id === team.id);
+
+    const playersHtml = teamPlayers.length > 0
+        ? teamPlayers.map(p => `
+        <div class="player-item">
+            <span>${p.name}</span>
+            <span class="player-status ${p.has_moved ? 'moved' : ''}">
+                ${p.has_moved ? '⛔️' : ''}
+            </span>
+            <span class="player-status ${p.is_current ? 'moved' : ''}">
+                ${p.is_current ? '🟢' : ''}
+            </span>
+            <button class="delete-player-btn" onclick="deletePlayer(${p.id})">❌</button>
+        </div>
+      `).join('')
+        : '<div class="no-players">Игроков нет</div>';
+
+    card.innerHTML += `
+        <div class="players-box">
+            <h4>🎮 Игроки</h4>
+            <div class="players-list">
+                ${playersHtml}
+            </div>
+            <input type="text" id="new-player-${team.id}" class="enchanted-input" placeholder="Имя игрока">
+            <button class="magic-btn" onclick="createPlayer(${team.id})">Добавить игрока</button>
+        </div>
+    `;
+
     return card;
+}
+
+// async function fetchGameRound() {
+//     try {
+//         const r = await fetch('/api/admin/game')
+//         round = await r.json();
+//
+//         renderGameRound(round);
+//     } catch (error) {
+//         console.error('Ошибка загрузки раундов:', error);
+//     }
+// }
+//
+// async function fetchPlayers() {
+//     try {
+//         const res = await fetch('/api/admin/players');
+//         players = await res.json();
+//         if (!Array.isArray(players)) players = [];
+//         renderTeams(window.lastTeams || []);
+//
+//         renderActivePlayer(players);
+//     } catch (err) {
+//         console.error('Ошибка загрузки игроков:', err);
+//         players = [];
+//     }
+// }
+
+async function createPlayer(teamId) {
+    const input = document.getElementById(`new-player-${teamId}`);
+    const name = input.value.trim();
+
+    if (!name) {
+        showNotification('Введите имя игрока', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/admin/players', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, team_id: teamId })
+        });
+
+        if (!res.ok) throw new Error(await res.text());
+
+        input.value = '';
+        await fetchPlayers();  // обновляем список
+        showNotification('Игрок создан!', 'success');
+
+    } catch (err) {
+        console.error(err);
+        showNotification('Ошибка создания игрока', 'error');
+    }
+}
+
+async function deletePlayer(id) {
+    if (!confirm('Удалить игрока?')) return;
+
+    try {
+        const res = await fetch(`/api/admin/players/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(await res.text());
+
+        await fetchPlayers();
+        showNotification('Игрок удалён!', 'success');
+
+    } catch (err) {
+        console.error(err);
+        showNotification('Ошибка удаления игрока', 'error');
+    }
 }
 
 function updateCreateButton(teamsCount) {
@@ -296,19 +462,18 @@ function displayCurrentEvent(events) {
         container.innerHTML = `
             <div class="current-event-content">
                 ${imageHtml}
-                <div class="current-event-title">${currentEvent.title}</div>
-                <div class="current-event-description"><b>${currentEvent.type}</b></div>
+                ${currentEvent.title ? `<div class="current-event-title">${currentEvent.title}</div>` : ''}
+                ${currentEvent.type ? `<div class="current-event-description"><b>${currentEvent.difficult || ''} ${currentEvent.type}</b></div>` : ''}
                 ${currentEvent.description ? `<div class="current-event-description">${currentEvent.description}</div>` : ''}
-                <div class="current-event-description">
+                ${currentEvent.victory_effect ? `<div class="current-event-description">
                     <span><b>Победа:</b> ${currentEvent.victory_effect}</span>
-                </div>
-                <div class="current-event-description">
+                </div>` : ''}
+                ${currentEvent.defeat_effect ? `<div class="current-event-description">
                     <span><b>Поражение:</b> ${currentEvent.defeat_effect}</span>
-                </div>
-                <div class="current-event-description">
+                </div>` : ''}
+                ${currentEvent.requirement ? `<div class="current-event-description">
                     <span><b>Зависимости:</b> ${currentEvent.requirement}</span>
-                </div>
-                
+                </div>` : ''}
             </div>
         `;
         nextEventBtn.disabled = false;
@@ -330,10 +495,12 @@ async function nextEvent() {
         if (res.ok) {
             const nextEvent = await res.json();
             showNotification(`Дальше: ${nextEvent.title}`, 'success');
-            await fetchEvents(); // Обновляем список событий
+            await fetchEvents();
+            await fetchPlayers();
+            await fetchGameRound();
         } else if (res.status === 404) {
             showNotification('Нет доступных событий для переключения!', 'error');
-            await fetchEvents(); // Все равно обновляем, чтобы сбросить текущее
+            await fetchEvents();
         } else {
             throw new Error('Ошибка сервера');
         }
@@ -421,7 +588,7 @@ function createEventCard(event) {
         <div class="event-title">
             <h3>${event.title}</h3>
             <div  class="event-info">
-                ${event.type} • ${event.difficult}
+                ${event.type}${event.difficult ? ` • ${event.difficult}` : ''}
             </div>
         </div>
     `;
@@ -529,7 +696,7 @@ function showEditEventModal(event) {
 
                 <div class="form-group">
                     <label style="display: block; margin-bottom: 8px; color: #5D4037; font-weight: bold;">
-                        Зависимости
+                        Условие
                     </label>
                     <textarea id="edit-event-requirement" class="enchanted-input event-description" 
                               placeholder="Зависимости для события..." rows="2">${escapeHtml(event.requirement)}</textarea>
@@ -639,26 +806,6 @@ async function saveEventChanges(eventId, currentEvent) {
 
     if (!type) {
         showNotification('Введите тип события', 'error');
-        return;
-    }
-
-    if (!difficult) {
-        showNotification('Введите сложность события', 'error');
-        return;
-    }
-
-    if (!victory_effect) {
-        showNotification('Введите эффект победы', 'error');
-        return;
-    }
-
-    if (!defeat_effect) {
-        showNotification('Введите эффект поражения', 'error');
-        return;
-    }
-
-    if (!requirement) {
-        showNotification('Введите зависимости для события', 'error');
         return;
     }
 
@@ -956,7 +1103,9 @@ async function confirmReset() {
             closeResetModal();
             showNotification('Мир успешно перерождён!', 'success');
             await fetchTeams();
-            await fetchEvents()
+            await fetchEvents();
+            await fetchPlayers();
+            await fetchGameRound();
         } else {
             throw new Error('Ошибка сервера');
         }

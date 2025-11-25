@@ -1,5 +1,24 @@
 const maxValue = 40;
 let ws = null;
+/**
+ * @typedef {Object} Player
+ * @property {name} name
+ * @property {team_id} team_id
+ * @property {team_name} team_name
+ * @property {has_moved} has_moved
+ * @property {team_id} team_id
+ */
+
+/** @type {Player|undefined} */
+let players = [];
+
+/**
+ * @typedef {Object} Round
+ * @property {current_round} current_round
+ */
+
+/** @type {Round|undefined} */
+let round
 
 function renderTeamFlask(health, drunk, options = {}) {
     const MAX = 40;
@@ -25,7 +44,7 @@ function renderTeamFlask(health, drunk, options = {}) {
 
     // Расчет размеров с учетом масштаба
     const flaskX = 45 * scale;
-    const flaskY = 15 * scale;
+    const flaskY = 15 * scale ;
     const flaskWidth = 90 * scale;
     const flaskHeight = 350 * scale + 85;
     const borderRadius = 40 * scale;
@@ -38,13 +57,17 @@ function renderTeamFlask(health, drunk, options = {}) {
         
             <defs>
                 <clipPath id="flask-clip">
-                    <rect x="${flaskX}" y="${flaskY}" width="${flaskWidth}" height="${flaskHeight}" rx="${borderRadius}" ry="${borderRadius}"></rect>
+                    <rect x="${flaskX}" y="${flaskY-11}" width="${flaskWidth}" height="${flaskHeight}" rx="${borderRadius}" ry="${borderRadius}"></rect>
+                </clipPath>
+        
+                <clipPath id="scale-clip">
+                    <rect x="${flaskX}" y="${flaskY-11}" width="${flaskWidth}" height="${flaskHeight}" rx="${borderRadius}" ry="${borderRadius}"></rect>
                 </clipPath>
         
                 <linearGradient id="glassGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stop-color="rgba(255,255,255,0.35)" />
-                    <stop offset="40%" stop-color="rgba(255,255,255,0.05)" />
-                    <stop offset="100%" stop-color="rgba(255,255,255,0.35)" />
+                    <stop offset="0%" stop-color="rgba(255,255,255,0.25)" />
+                    <stop offset="50%" stop-color="rgba(255,255,255,0.05)" />
+                    <stop offset="100%" stop-color="rgba(255,255,255,0.25)" />
                 </linearGradient>
             </defs>
         
@@ -55,7 +78,7 @@ function renderTeamFlask(health, drunk, options = {}) {
                       y="${baseY}" 
                       width="${flaskWidth}" 
                       height="${320 * scale}"
-                      fill="#ffcf40"/>
+                      fill="#e59d01"/>
                       
                 <!-- КРАСНАЯ ЖИДКОСТЬ -->
                 <rect class="health-liquid"
@@ -68,35 +91,40 @@ function renderTeamFlask(health, drunk, options = {}) {
                 <!-- ЖЕЛТАЯ ЖИДКОСТЬ -->
                 <rect class="beer-liquid"
                       x="${flaskX}" 
-                      y="${baseY - drunkHeight}" 
+                      y="${baseY - drunkHeight + 0.4}" 
                       width="${flaskWidth}" 
                       height="${drunkHeight}"
-                      fill="#ffcf40"/>
+                      fill="#e59d01"/>
                       
                 ${generateBubbles(flaskX, baseY - drunkHeight, flaskWidth, drunkHeight+5)}
             </g>
 
-            <!-- КОНТУР КОЛБЫ -->
-            <rect x="${flaskX}" y="${flaskY}" width="${flaskWidth}" height="${flaskHeight}" rx="${borderRadius}" ry="${borderRadius}"
-                  fill="url(#glassGradient)" stroke="#e6e6e6" stroke-width="${strokeWidth}"/>
-
-            <!-- ЛИНЕЙКА СЛЕВА -->
-            <g stroke="#ffffffaa" stroke-width="${2 * scale}">
-                ${Array.from({ length: MAX + 1 }).map((_, i) => {
-        const y = baseY - (i * (H / MAX));
-        // Рисуем риски слева от колбы
-        return `<line x1="${5 * scale}" y1="${y}" x2="${25 * scale}" y2="${y}"/>`;
-    }).join('')}
+            <g clip-path="url(#scale-clip)">
+                <!-- РИСКИ -->
+                <g stroke="#e6e6e6" stroke-width="${1.5 * scale}">
+                    ${Array.from({ length: MAX + 1 }).map((_, i) => {
+                    const y = baseY - (i * (H / MAX));
+                    // Рисуем риски слева от колбы
+                    let centerX = flaskX + flaskWidth / 2 - 20;
+                    let tickLength = 35 * scale;
+                    return `<line x1="${centerX - tickLength/2}" y1="${y}" x2="${centerX + tickLength/2}" y2="${y}"/>`;
+                }).join('')}
+                </g>
+                    
+                <!-- ЦИФРЫ -->
+                <g fill="#e6e6e6" font-size="${10 * scale}" font-family="Georgia" text-anchor="middle">
+                    ${Array.from({ length: MAX + 1 }).map((_, i) => {
+                    const y = baseY + (3 * scale) - (i * (H / MAX));
+                    // Цифры слева, напротив рисок
+                    let centerX = flaskX + flaskWidth / 2;
+                    return `<text x="${centerX}" y="${y}">${i}</text>`;
+                }).join('')}
+                </g>
             </g>
-
-            <!-- ЦИФРЫ НАПРОТИВ РИСОК СЛЕВА -->
-            <g fill="#ffffffcc" font-size="${10 * scale}" font-family="Georgia" text-anchor="middle">
-                ${Array.from({ length: MAX + 1 }).map((_, i) => {
-        const y = baseY + (3 * scale) - (i * (H / MAX));
-        // Цифры слева, напротив рисок
-        return `<text x="${0.1 * scale -5}" y="${y}">${i}</text>`;
-    }).join('')}
-            </g>
+            
+            <rect x="${flaskX}" y="${flaskY-10}" width="${flaskWidth}" height="${flaskHeight}" 
+                    rx="${borderRadius}" ry="${borderRadius}" fill="url(#glassGradient)" 
+                    stroke="#e6e6e6" stroke-width="${strokeWidth}"/>
 
         </svg>
     `;
@@ -108,14 +136,14 @@ function renderTeamFlask(health, drunk, options = {}) {
     return svg;
 }
 
-function generateBubbles(x, y, width, height, count = 50) { // больше пузырьков
+function generateBubbles(x, y, width, height, count = 150) { // больше пузырьков
     const circles = [];
     for (let i = 0; i < count; i++) {
         const cx = x + Math.random() * width;
         const cy = y + Math.random() * height;
         const r = Math.random() * 2 + 1;
         const opacity = Math.random() * 0.5 + 0.3;
-        circles.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" fill-opacity="${opacity}" />`);
+        circles.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="#d7dbd5" fill-opacity="${opacity}" />`);
     }
     return circles.join('');
 }
@@ -178,11 +206,12 @@ function displayActiveEvent(events) {
     descContainer.innerHTML = `
         <div class="event-description-bottom">
             <div class="event-type">
-                <span>${activeEvent.difficult}</span>
+                <span>${activeEvent.difficult || ''}</span>
                 <span>${activeEvent.type}</span>
             </div>
             <div class="event-title-bottom">${activeEvent.title}</div>
             <div class="event-description-text">${activeEvent.description || ''}</div>
+            <div class="event-requirement-text">${activeEvent.requirement || ''}</div>
         </div>
     `;
 }
@@ -237,6 +266,8 @@ function connectWebSocket() {
         updateConnectionStatus('connected');
         fetchTeams();
         fetchEvents();
+        fetchGameRound();
+        fetchPlayers();
     };
 
     ws.onmessage = function(event) {
@@ -252,6 +283,9 @@ function connectWebSocket() {
                 fetchTeams();
                 break;
             case 'events_updated':
+                fetchPlayers();
+                fetchGameRound();
+                break;
             case 'event_created':
             case 'event_deleted':
             case 'event_status_changed':
@@ -260,6 +294,8 @@ function connectWebSocket() {
             case 'world_reset':
                 console.log('Events data changed, refreshing...');
                 fetchEvents();
+                fetchPlayers();
+                fetchGameRound();
                 break;
             case 'connected':
                 console.log('Connected to server');
@@ -411,6 +447,54 @@ function renderGameScore(health, drunk) {
 
     return svg;
 }
+
+async function fetchGameRound() {
+    try {
+        const r = await fetch('/api/admin/game')
+        round = await r.json();
+
+        renderGameRound(round);
+    } catch (error) {
+        console.error('Ошибка загрузки раундов:', error);
+    }
+}
+
+async function fetchPlayers() {
+    try {
+        const res = await fetch('/api/admin/players');
+        players = await res.json();
+        if (!Array.isArray(players)) players = [];
+
+        renderActivePlayer(players);
+    } catch (err) {
+        console.error('Ошибка загрузки игроков:', err);
+        players = [];
+    }
+}
+
+function renderGameRound(round) {
+    const container = document.getElementById('game-round');
+
+    container.innerHTML = `
+        <span class="game-round-desc">
+            Раунд: 
+            <span class="game-round">${round.current_round}</span>
+        </span> 
+    `;
+}
+
+function renderActivePlayer(player) {
+    const container = document.getElementById('active-player');
+    const currentPlayer = players.find(p => p.is_current);
+
+    container.innerHTML = `
+        <span class="active-player-desc">
+            Сейчас ходит: 
+            <span class="active-player">${currentPlayer.name}</span>
+        </span> 
+    `;
+}
+
 
 window.onload = function() {
     connectWebSocket();

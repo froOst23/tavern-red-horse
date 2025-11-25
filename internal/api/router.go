@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -57,6 +58,21 @@ func (a *App) NewRouter() *chi.Mux {
 		r.Put("/{id}", a.UpdateEvent)
 		r.Post("/next", a.NextEvent)
 		r.Delete("/{id}", a.DeleteEvent)
+	})
+
+	r.Route("/api/admin/players", func(r chi.Router) {
+		r.Get("/", a.GetPlayers)
+		r.Post("/", a.CreatePlayer)
+		r.Put("/{id}/move", a.MarkPlayerMoved)
+		r.Put("/{id}/reset", a.ResetPlayerMove)
+		r.Delete("/{id}", a.DeletePlayer)
+	})
+
+	r.Route("/api/admin/game", func(r chi.Router) {
+		r.Get("/", a.GetGameState)
+		r.Post("/next_round", a.NextRound)
+		r.Post("/reset_rounds", a.ResetRounds)
+		r.Post("/check_round", a.CheckRoundProgress)
 	})
 
 	r.Route("/viewer", func(r chi.Router) {
@@ -351,7 +367,36 @@ func (a *App) ResetTeams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Сбрасываем события - все непройденные, снимаем текущее
+	// Сбрасываем ход игроков
+	_, err = a.DB.Exec(r.Context(), `
+		UPDATE players
+		SET has_moved = false, is_current = false
+	`)
+
+	// Выбираем следующего игрока
+	_, err = a.DB.Exec(r.Context(), `
+		UPDATE players
+		SET has_moved = false, is_current = false
+	`)
+
+	// Выбираем ход случайного игрока
+	_, err = a.DB.Exec(r.Context(), `
+		UPDATE players
+		SET is_current = true
+		WHERE id = (
+		SELECT id
+		FROM players
+		ORDER BY RANDOM()
+		LIMIT 1)
+	`)
+
+	// Сбрасываем счетчик раунда
+	_, err = a.DB.Exec(r.Context(), `
+		UPDATE game_state
+		SET current_round = 1, event_counter = 0
+	`)
+
+	// Сбрасываем события - все не пройденные, снимаем текущее
 	_, err = a.DB.Exec(r.Context(), `
         UPDATE events 
         SET used = false, current = false
@@ -414,6 +459,13 @@ func (a *App) ResetTeams(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	a.broadcast(map[string]interface{}{
+		"type": "player_reset",
+		"data": map[string]interface{}{
+			"message": "Ходы игроков сброшены",
+		},
+	})
 
 	// Отправляем отдельные broadcast для команд и событий
 	a.broadcast(map[string]interface{}{
@@ -773,16 +825,36 @@ func (a *App) UpdateEventStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) NextEvent(w http.ResponseWriter, r *http.Request) {
+	// Начинаем транзакцию для обеспечения целостности данных
+	tx, err := a.DB.Begin(r.Context())
+	if err != nil {
+		http.Error(w, "Failed to start transaction: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	defer func(tx pgx.Tx, ctx context.Context) {
+		err := tx.Rollback(ctx)
+		if err != nil {
+			slog.Error("Failed to rollback transaction", "error", err)
+			return
+		}
+	}(tx, r.Context())
+
 	// Находим текущее активное событие
 	var currentEventID int
-	err := a.DB.QueryRow(r.Context(), `
-        SELECT id FROM events WHERE current = true LIMIT 1
+	err = tx.QueryRow(r.Context(), `
+        SELECT id 
+        FROM events 
+        WHERE current = true 
+        LIMIT 1
     `).Scan(&currentEventID)
 
 	if err == nil {
 		// Помечаем текущее событие как использованное и снимаем флаг текущего
-		_, err = a.DB.Exec(r.Context(), `
-            UPDATE events SET used = true, current = false WHERE id = $1
+		_, err = tx.Exec(r.Context(), `
+            UPDATE events
+            SET used = true, current = false
+            WHERE id = $1
         `, currentEventID)
 		if err != nil {
 			http.Error(w, "Failed to mark current event as used: "+err.Error(), http.StatusInternalServerError)
@@ -790,59 +862,255 @@ func (a *App) NextEvent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Получаем счетчик событий
+	var eventCounter int
+	err = tx.QueryRow(r.Context(), `
+        SELECT event_counter 
+        FROM game_state 
+        WHERE id = 1
+    `).Scan(&eventCounter)
+	if err != nil {
+		http.Error(w, "Failed to get event counter: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Увеличиваем счетчик (если это не init событие)
+	nextCounter := eventCounter + 1
+	isThirdEvent := nextCounter%3 == 0
+
+	var nextEvent models.Event
+	var found bool
+
 	// Сначала проверяем, есть ли неиспользованное событие с init = true
 	var initEvent models.Event
-	err = a.DB.QueryRow(r.Context(), `
-        SELECT id, title, description, image_path, used, created_at
+	err = tx.QueryRow(r.Context(), `
+        SELECT id, title, description, type, image_path, used, created_at
         FROM events 
         WHERE init = true AND used = false
         LIMIT 1
-    `).Scan(&initEvent.ID, &initEvent.Title, &initEvent.Description, &initEvent.ImagePath, &initEvent.Used, &initEvent.CreatedAt)
-
-	var nextEvent models.Event
+    `).Scan(
+		&initEvent.ID,
+		&initEvent.Title,
+		&initEvent.Description,
+		&initEvent.Type,
+		&initEvent.ImagePath,
+		&initEvent.Used,
+		&initEvent.CreatedAt)
 
 	if err == nil {
 		// Если нашли неиспользованное init событие - используем его
+		// Для init событий не увеличиваем счетчик
 		nextEvent = initEvent
-	} else {
-		// Если нет неиспользованного init события, ищем случайное непройденное событие
-		err = a.DB.QueryRow(r.Context(), `
-            SELECT id, title, description, image_path, used, created_at
-            FROM events 
-            WHERE used = false 
-            ORDER BY RANDOM() 
-            LIMIT 1
-        `).Scan(&nextEvent.ID, &nextEvent.Title, &nextEvent.Description, &nextEvent.ImagePath, &nextEvent.Used, &nextEvent.CreatedAt)
-
+		found = true
+		_, err = tx.Exec(r.Context(), `
+            UPDATE game_state 
+            SET event_counter = event_counter 
+            WHERE id = 1
+        `) // Не меняем счетчик для init событий
 		if err != nil {
-			// Если нет доступных событий, отправляем broadcast о смене
-			a.broadcast(map[string]interface{}{
-				"type": "event_changed",
-				"data": nil,
-			})
-			a.broadcast(map[string]interface{}{
-				"type": "events_updated",
-				"data": map[string]interface{}{
-					"message": "No more events available",
-				},
-			})
-			http.Error(w, "No more events available", http.StatusNotFound)
+			http.Error(w, "Failed to update event counter: "+err.Error(), http.StatusInternalServerError)
 			return
+		}
+	} else {
+		// Если это третье событие - ищем азартную игру
+		if isThirdEvent {
+			err = tx.QueryRow(r.Context(), `
+                SELECT id, title, description, type, image_path, used, created_at
+                FROM events 
+                WHERE type = 'Азартная игра' AND used = false 
+                ORDER BY RANDOM() 
+                LIMIT 1
+            `).Scan(
+				&nextEvent.ID,
+				&nextEvent.Title,
+				&nextEvent.Description,
+				&nextEvent.Type,
+				&nextEvent.ImagePath,
+				&nextEvent.Used,
+				&nextEvent.CreatedAt)
+
+			if err == nil {
+				found = true
+				// Сбрасываем счетчик после азартной игры
+				_, err = tx.Exec(r.Context(), `
+                    UPDATE game_state SET event_counter = 0 WHERE id = 1
+                `)
+				if err != nil {
+					http.Error(w, "Failed to reset event counter: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+			}
+		}
+
+		// Если не нашли азартную игру (или это не третье событие), ищем любое событие
+		if !found {
+			err = tx.QueryRow(r.Context(), `
+                SELECT id, title, description, type, image_path, used, created_at
+                FROM events 
+                WHERE used = false AND type != 'Азартная игра'
+                ORDER BY RANDOM() 
+                LIMIT 1
+            `).Scan(
+				&nextEvent.ID,
+				&nextEvent.Title,
+				&nextEvent.Description,
+				&nextEvent.Type,
+				&nextEvent.ImagePath,
+				&nextEvent.Used,
+				&nextEvent.CreatedAt)
+
+			if err != nil {
+				// Если нет доступных событий, откатываем транзакцию и отправляем broadcast
+				tx.Rollback(r.Context())
+				a.broadcast(map[string]interface{}{
+					"type": "event_changed",
+					"data": nil,
+				})
+				a.broadcast(map[string]interface{}{
+					"type": "events_updated",
+					"data": map[string]interface{}{
+						"message": "No more events available",
+					},
+				})
+				http.Error(w, "No more events available", http.StatusNotFound)
+				return
+			}
+
+			// Обновляем счетчик для обычных событий
+			updateQuery := `
+				UPDATE game_state 
+				SET event_counter = $1 
+				WHERE id = 1`
+
+			if isThirdEvent {
+				// Если это должно было быть третье событие, но азартной игры не нашлось,
+				// все равно сбрасываем счетчик
+				_, err = tx.Exec(r.Context(), updateQuery, 0)
+			} else {
+				_, err = tx.Exec(r.Context(), updateQuery, nextCounter)
+			}
+			if err != nil {
+				http.Error(w, "Failed to update event counter: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
 	}
 
 	// Помечаем выбранное событие как текущее
-	_, err = a.DB.Exec(r.Context(), `UPDATE events SET current = true WHERE id = $1`, nextEvent.ID)
+	_, err = tx.Exec(r.Context(), `
+		UPDATE events 
+		SET current = true 
+		WHERE id = $1
+	`, nextEvent.ID)
 	if err != nil {
 		http.Error(w, "Failed to set current event: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Получаем обновленные данные события
-	err = a.DB.QueryRow(r.Context(), `
-        SELECT id, title, description, image_path, used, current, created_at
-        FROM events WHERE id = $1
-    `, nextEvent.ID).Scan(&nextEvent.ID, &nextEvent.Title, &nextEvent.Description, &nextEvent.ImagePath, &nextEvent.Used, &nextEvent.Current, &nextEvent.CreatedAt)
+	err = tx.QueryRow(r.Context(), `
+        SELECT id, title, description, type, image_path, used, current, created_at
+        FROM events 
+        WHERE id = $1
+    `, nextEvent.ID).Scan(
+		&nextEvent.ID,
+		&nextEvent.Title,
+		&nextEvent.Description,
+		&nextEvent.Type,
+		&nextEvent.ImagePath,
+		&nextEvent.Used,
+		&nextEvent.Current,
+		&nextEvent.CreatedAt)
+
+	// ПЕРЕКЛЮЧЕНИЕ РАУНДОВ
+	// Сначала получаем ID текущего игрока и обновляем его состояние
+	var currentPlayerTeamID int
+	var currentPlayerID int
+	err = tx.QueryRow(r.Context(), `
+		UPDATE players 
+		SET has_moved = true, is_current = false 
+		WHERE is_current = true 
+		RETURNING team_id, id
+	`).Scan(
+		&currentPlayerTeamID,
+		&currentPlayerID)
+
+	if err != nil && err != pgx.ErrNoRows {
+		http.Error(w, "Failed to update current player: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Проверяем все ли игроки сходили после обновления текущего
+	var allMoved bool
+	err = tx.QueryRow(r.Context(), `
+		SELECT bool_and(has_moved) 
+		FROM players`).Scan(
+		&allMoved)
+	if err != nil {
+		http.Error(w, "Failed to check players state: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if allMoved {
+		// Сбрасываем has_moved у всех игроков
+		_, err = tx.Exec(r.Context(), `
+			UPDATE players
+			SET has_moved = false`)
+		if err != nil {
+			http.Error(w, "Failed to reset players: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Увеличиваем current_round
+		_, err = tx.Exec(r.Context(), `
+			UPDATE game_state 
+			SET current_round = current_round + 1 
+			WHERE id = 1`)
+		if err != nil {
+			http.Error(w, "Failed to increment round: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Выбираем случайного игрока из противоположной команды как нового текущего
+		_, err = tx.Exec(r.Context(), `
+			UPDATE players
+			SET is_current = true
+			WHERE id = (
+				SELECT id
+				FROM players
+				WHERE team_id != $1
+				ORDER BY RANDOM()
+				LIMIT 1
+			)
+		`, currentPlayerTeamID)
+		if err != nil {
+			http.Error(w, "Failed to set new current player: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// Выбираем следующего игрока из противоположной команды который еще не ходил
+		_, err = tx.Exec(r.Context(), `
+			UPDATE players
+			SET is_current = true
+			WHERE id = (
+				SELECT id
+				FROM players
+				WHERE team_id != $1 AND has_moved = false
+				ORDER BY RANDOM()
+				LIMIT 1
+			)
+		`, currentPlayerTeamID)
+		if err != nil {
+			http.Error(w, "Failed to set next player: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Коммитим транзакцию
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, "Failed to commit transaction: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	// Отправляем broadcast о смене события
 	a.broadcast(map[string]interface{}{
@@ -861,6 +1129,210 @@ func (a *App) NextEvent(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(nextEvent)
+}
+
+// ==================== PLAYER ENDPOINTS ====================
+
+func (a *App) GetPlayers(w http.ResponseWriter, r *http.Request) {
+	rows, err := a.DB.Query(r.Context(), `
+		SELECT id, name, team_id, has_moved, is_current, created_at
+		FROM players
+		ORDER BY id
+	`)
+	if err != nil {
+		http.Error(w, "Failed to query players: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var players []models.Player
+	for rows.Next() {
+		var p models.Player
+		if err := rows.Scan(&p.ID, &p.Name, &p.TeamID, &p.HasMoved, &p.IsCurrent, &p.CreatedAt); err != nil {
+			http.Error(w, "Failed to scan player: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		players = append(players, p)
+	}
+
+	json.NewEncoder(w).Encode(players)
+}
+
+func (a *App) CreatePlayer(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name   string `json:"name"`
+		TeamID int    `json:"team_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	_, err := a.DB.Exec(r.Context(),
+		`INSERT INTO players (name, team_id) VALUES ($1, $2)`,
+		body.Name, body.TeamID,
+	)
+	if err != nil {
+		http.Error(w, "Failed to create player: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	a.broadcast(map[string]interface{}{
+		"type": "players_updated",
+	})
+}
+
+func (a *App) MarkPlayerMoved(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid player ID", http.StatusBadRequest)
+		return
+	}
+
+	_, err = a.DB.Exec(r.Context(), `
+		UPDATE players SET has_moved = true WHERE id = $1
+	`, id)
+	if err != nil {
+		http.Error(w, "Failed to update player: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	a.broadcast(map[string]interface{}{"type": "player_moved"})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *App) ResetPlayerMove(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid player ID", http.StatusBadRequest)
+		return
+	}
+
+	_, err = a.DB.Exec(r.Context(),
+		`UPDATE players SET has_moved = false WHERE id=$1`,
+		id,
+	)
+	if err != nil {
+		http.Error(w, "Failed to reset move: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *App) DeletePlayer(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	_, err = a.DB.Exec(r.Context(), `DELETE FROM players WHERE id=$1`, id)
+	if err != nil {
+		http.Error(w, "Failed to delete player: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	a.broadcast(map[string]interface{}{
+		"type": "player_deleted",
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ==================== GAME STATS ==========================
+
+func (a *App) GetGameState(w http.ResponseWriter, r *http.Request) {
+	var gs models.GameState
+
+	err := a.DB.QueryRow(r.Context(),
+		`SELECT id, current_round FROM game_state LIMIT 1`,
+	).Scan(&gs.ID, &gs.CurrentRound)
+
+	if err != nil {
+		http.Error(w, "Failed to load game state: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(gs)
+}
+
+func (a *App) NextRound(w http.ResponseWriter, r *http.Request) {
+	_, err := a.DB.Exec(r.Context(), `
+		UPDATE game_state 
+		SET current_round = current_round + 1
+	`)
+	if err != nil {
+		http.Error(w, "Failed to next round: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	a.broadcast(map[string]interface{}{
+		"type": "round_updated",
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *App) ResetRounds(w http.ResponseWriter, r *http.Request) {
+	_, err := a.DB.Exec(r.Context(),
+		`UPDATE game_state SET current_round = 1, event_counter = 0`,
+	)
+	if err != nil {
+		http.Error(w, "Failed to reset rounds: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	a.broadcast(map[string]interface{}{
+		"type": "round_reset",
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *App) CheckRoundProgress(w http.ResponseWriter, r *http.Request) {
+	var total, moved int
+
+	err := a.DB.QueryRow(r.Context(),
+		`SELECT COUNT(*) FROM players`,
+	).Scan(&total)
+	if err != nil {
+		http.Error(w, "Failed to count players: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = a.DB.QueryRow(r.Context(),
+		`SELECT COUNT(*) FROM players WHERE has_moved = true`,
+	).Scan(&moved)
+	if err != nil {
+		http.Error(w, "Failed to count moves: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if total > 0 && total == moved {
+		// Все игроки сходили → следующий раунд
+		_, err = a.DB.Exec(r.Context(),
+			`UPDATE game_state SET current_round = current_round + 1`,
+		)
+		if err != nil {
+			http.Error(w, "Failed to next round: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Сбрасываем has_moved всем игрокам
+		_, _ = a.DB.Exec(r.Context(), `UPDATE players SET has_moved = false`)
+
+		a.broadcast(map[string]interface{}{
+			"type": "round_auto_advanced",
+		})
+	}
+
+	json.NewEncoder(w).Encode(map[string]int{
+		"total": total,
+		"moved": moved,
+	})
 }
 
 // ==================== VIEWER ENDPOINTS ====================

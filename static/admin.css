@@ -576,7 +576,9 @@ h3 {
 
 .current-event-image {
     width: 100%;
-    max-width: 200px;
+    height: 200px;
+    overflow: hidden;
+    max-width: 400px;
     margin: 0 auto 15px;
     border-radius: 10px;
     border: 2px solid #ffd700;
@@ -584,8 +586,9 @@ h3 {
 
 .current-event-image img {
     width: 100%;
-    height: auto;
+    height: 200px;
     border-radius: 8px;
+    object-fit: cover;
 }
 
 .no-current-event {
@@ -635,4 +638,48 @@ h3 {
     border: 2px solid #8B4513;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     z-index: 5;
+}
+
+.players-box {
+    margin-top: 10px;
+    padding: 10px;
+    border: 2px solid #5D4037;
+    border-radius: 10px;
+    background: #f8f4eb;
+}
+
+.players-list {
+    margin-bottom: 10px;
+}
+
+.player-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #eee3c7;
+    padding: 6px 10px;
+    border-radius: 8px;
+    margin-bottom: 5px;
+}
+
+.player-status {
+    font-weight: bold;
+}
+
+.player-status.moved {
+    color: green;
+}
+
+.delete-player-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.active-player {
+    text-align: center;
+    color: #5D4037;
+    font-size: 15px;
+    font-weight: bold;
 }
