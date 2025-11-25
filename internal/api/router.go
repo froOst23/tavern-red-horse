@@ -118,10 +118,10 @@ func (a *App) ServeEventImage(w http.ResponseWriter, r *http.Request) {
 
 	// Устанавливаем правильный Content-Type
 	w.Header().Set("Content-Type", stat.ContentType)
-	w.Header().Set("Content-Type", stat.ContentType)
-	w.Header().Set("Cache-Control", "public, max-age=31536000")
-	w.Header().Set("Expires", time.Now().Add(365*24*time.Hour).Format(http.TimeFormat))
-	w.Header().Set("ETag", fmt.Sprintf("\"%s\"", stat.ETag))
+	//w.Header().Set("Content-Type", stat.ContentType)
+	//w.Header().Set("Cache-Control", "public, max-age=31536000")
+	//w.Header().Set("Expires", time.Now().Add(365*24*time.Hour).Format(http.TimeFormat))
+	//w.Header().Set("ETag", fmt.Sprintf("\"%s\"", stat.ETag))
 
 	// Копируем объект из MinIO в ответ
 	_, err = io.Copy(w, object)
