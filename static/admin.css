@@ -660,6 +660,26 @@ h3 {
     padding: 6px 10px;
     border-radius: 8px;
     margin-bottom: 5px;
+    cursor: pointer;
+}
+
+/* Игрок уже ходил */
+
+.player-name-moved {
+    text-decoration: line-through;
+}
+
+.player-moved {
+    background: #e0e0e0;
+    opacity: 0.6;
+}
+
+/* Текущий игрок */
+.player-current {
+    background: #caffc7;
+    border-color: #5ecf60;
+    font-weight: bold;
+    text-decoration: none;
 }
 
 .player-status {

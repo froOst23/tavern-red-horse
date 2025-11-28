@@ -98,6 +98,7 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 160px;
+    transition: 0.3s;
 }
 
 .team-svg svg {
@@ -249,14 +250,15 @@ body {
     top: 5px;
     right: 5px;
     padding: 5px 10px;
-    border-radius: 8px;
-    font-size: 0.8vw;
+    border-radius: 25px;
+    font-size: 10px;
     z-index: 1000;
+    transition: 0.3s;
 }
 
-.status-connected { background: green; color: white; }
-.status-connecting { background: orange; color: white; }
-.status-disconnected { background: red; color: white; }
+.status-connected { background: #4a724a; color: #fff; }
+.status-connecting { background: #8c6d42; color: #fff; }
+.status-disconnected { background: #8c4a4a; color: #fff; }
 
 /* =========================
     ЭФФЕКТ ПРОИГРЫША

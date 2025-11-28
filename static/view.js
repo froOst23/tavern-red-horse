@@ -20,6 +20,26 @@ let players = [];
 /** @type {Round|undefined} */
 let round
 
+/**
+ * @typedef {Object} Event
+ * @property {number} id
+ * @property {string} title
+ * @property {string} description
+ * @property {string} type
+ * @property {string} difficult
+ * @property {boolean} current
+ * @property {boolean} init
+ * @property {boolean} used
+ * @property {string} requirement
+ * @property {string} victory_effect
+ * @property {string} defeat_effect
+ * @property {string} image_path
+ * @property {string} created_at
+ */
+
+/** @type {Event|undefined} */
+let events = [];
+
 function renderTeamFlask(health, drunk, options = {}) {
     const MAX = 40;
 
@@ -218,32 +238,16 @@ function displayActiveEvent(events) {
 
 async function fetchEvents() {
     try {
-        const res = await fetch('/viewer/events');
-        if (!res.ok) {
-            throw new Error(`HTTP error! status: ${res.status}`);
+        const r = await fetch('/viewer/events');
+        if (!r.ok) {
+            throw new Error(`HTTP error! status: ${r.status}`);
         }
 
-        /**
-         * @typedef {Object} Event
-         * @property {number} id
-         * @property {string} title
-         * @property {string} description
-         * @property {string} type
-         * @property {string} difficult
-         * @property {boolean} current
-         * @property {boolean} init
-         * @property {boolean} used
-         * @property {string} requirement
-         * @property {string} victory_effect
-         * @property {string} defeat_effect
-         * @property {string} image_path
-         * @property {string} created_at
-         */
-
-        /** @type {Event|undefined} */
-        const events = await res.json();
-        console.log('Получены события:', events);
+        events = await r.json(); // Сохраняем события в глобальную переменную
         displayActiveEvent(events);
+
+        // Также обновляем отображение игрока при изменении событий
+        renderActivePlayer();
     } catch (error) {
         console.error('Error fetching events:', error);
         const container = document.getElementById('active-event-container');
@@ -262,7 +266,7 @@ function connectWebSocket() {
     ws = new WebSocket(`${protocol}//${window.location.host}/viewer/ws`);
 
     ws.onopen = function() {
-        console.log('WebSocket connected');
+        console.log('[WebSocket] Connected');
         updateConnectionStatus('connected');
         fetchTeams();
         fetchEvents();
@@ -272,14 +276,14 @@ function connectWebSocket() {
 
     ws.onmessage = function(event) {
         const data = JSON.parse(event.data);
-        console.log('WebSocket message received:', data);
+        console.log('[WebSocket] message received:', data);
 
         switch(data.type) {
             case 'teams_updated':
             case 'team_created':
             case 'teams_reset':
             case 'world_reset':
-                console.log('Teams data changed, refreshing...');
+                console.log('[WebSocket] Teams data changed, refreshing...');
                 fetchTeams();
                 break;
             case 'events_updated':
@@ -292,19 +296,19 @@ function connectWebSocket() {
             case 'event_changed':
             case 'events_reset':
             case 'world_reset':
-                console.log('Events data changed, refreshing...');
+                console.log('[WebSocket] Events data changed, refreshing...');
                 fetchEvents();
                 fetchPlayers();
                 fetchGameRound();
                 break;
             case 'connected':
-                console.log('Connected to server');
+                console.log('[WebSocket] Connected to server');
                 break;
         }
     };
 
     ws.onclose = function() {
-        console.log('WebSocket disconnected, reconnecting in 3 seconds...');
+        console.log('[WebSocket] Disconnected, reconnecting in 3 seconds...');
         updateConnectionStatus('disconnected');
         setTimeout(connectWebSocket, 3000);
     };
@@ -450,7 +454,7 @@ function renderGameScore(health, drunk) {
 
 async function fetchGameRound() {
     try {
-        const r = await fetch('/api/admin/game')
+        const r = await fetch('/api/game')
         round = await r.json();
 
         renderGameRound(round);
@@ -461,7 +465,7 @@ async function fetchGameRound() {
 
 async function fetchPlayers() {
     try {
-        const res = await fetch('/api/admin/players');
+        const res = await fetch('/api/players');
         players = await res.json();
         if (!Array.isArray(players)) players = [];
 
@@ -486,16 +490,33 @@ function renderGameRound(round) {
 function renderActivePlayer(player) {
     const container = document.getElementById('active-player');
     const currentPlayer = players.find(p => p.is_current);
+    const hasActiveInitEvent = events && events.some(e => e.current && e.init);
 
-    container.innerHTML = `
-        <span class="active-player-desc">
-            Сейчас ходит: 
-            <span class="active-player">${currentPlayer.name}</span>
-        </span> 
-    `;
+    if (hasActiveInitEvent) {
+        container.innerHTML = `
+            <span class="active-player-desc">
+                Всем игрокам приготовится!
+            </span> 
+        `;
+    } else if (currentPlayer) {
+        container.innerHTML = `
+            <span class="active-player-desc">
+                Сейчас ходит: 
+                <span class="active-player">${currentPlayer.name}</span>
+            </span> 
+        `;
+    } else {
+        container.innerHTML = `
+            <span class="active-player-desc">
+                Нет активного игрока
+            </span> 
+        `;
+    }
 }
 
 
 window.onload = function() {
+    console.log("[App] Initializing client...");
     connectWebSocket();
+    console.log("[App] Init complete");
 };

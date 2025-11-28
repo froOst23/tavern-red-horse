@@ -28,14 +28,36 @@ let players = [];
 /** @type {Round|undefined} */
 let round
 
-// ==================== ИНИЦИАЛИЗАЦИЯ ====================
+/**
+ * @typedef {Object} Event
+ * @property {number} id
+ * @property {string} title
+ * @property {string} description
+ * @property {string} type
+ * @property {string} difficult
+ * @property {boolean} current
+ * @property {boolean} init
+ * @property {boolean} used
+ * @property {string} requirement
+ * @property {string} victory_effect
+ * @property {string} defeat_effect
+ * @property {string} image_path
+ * @property {string} created_at
+ */
+
+/** @type {Event|undefined} */
+let events = [];
+// ==================== ИНИЦИАЛИЗАЦИЯ ========================
+
 window.onload = async () => {
+    console.log("[App] Initializing...");
+    await fetchEvents();
     await fetchPlayers();
     await fetchTeams();
     await fetchGameRound();
-    await fetchEvents();
     setupEventListeners();
     connectWebSocket();
+    console.log("[App] Init complete")
 };
 
 function setupEventListeners() {
@@ -61,27 +83,33 @@ function handleKeyboardShortcuts(e) {
     }
 }
 
-// ==================== WEBSOCKET ====================
+// ======================= WEBSOCKET ==========================
+
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${window.location.host}/viewer/ws`);
 
     ws.onopen = function () {
-        console.log('WebSocket connected in admin');
+        console.log('[WebSocket] Connected');
     };
 
     ws.onmessage = function (event) {
         const data = JSON.parse(event.data);
-        console.log('WebSocket message received in admin:', data);
+        console.log('[WebSocket] Message:', data);
 
         switch (data.type) {
             case 'teams_updated':
             case 'team_created':
             case 'teams_reset':
             case 'world_reset':
-                console.log('Teams data changed, refreshing...');
+                console.log('[WebSocket] Teams data changed, refreshing...');
                 fetchTeams();
-                console.log('Events data changed, refreshing...');
+                console.log('[WebSocket] Events data changed, refreshing...');
+                fetchEvents();
+                break;
+            case 'player_moved':
+                console.log('[WebSocket] Players data changed, refreshing...');
+                fetchPlayers();
                 fetchEvents();
                 break;
             case 'events_updated':
@@ -91,25 +119,25 @@ function connectWebSocket() {
             case 'event_changed':
             case 'events_reset':
             case 'connected':
-                console.log('Connected to server');
+                console.log('[WebSocket] Connected to server');
                 break;
         }
     };
 
     ws.onclose = function () {
-        console.log('WebSocket disconnected in admin, reconnecting in 3 seconds...');
+        console.log('[WebSocket] Disconnected in admin, reconnecting in 3 seconds...');
         setTimeout(connectWebSocket, 3000);
     };
 
     ws.onerror = function (error) {
-        console.error('WebSocket error in admin:', error);
+        console.error('[WebSocket] Error in admin:', error);
     };
 }
 
 // ==================== РАБОТА С КОМАНДАМИ ====================
 async function fetchTeams() {
     try {
-        const res = await fetch('/api/admin/teams');
+        const res = await fetch('/api/teams');
         const teams = await res.json();
         renderTeams(teams);
     } catch (error) {
@@ -120,7 +148,7 @@ async function fetchTeams() {
 
 async function fetchGameRound() {
     try {
-        const r = await fetch('/api/admin/game')
+        const r = await fetch('/api/game')
         round = await r.json();
 
         renderGameRound(round);
@@ -131,7 +159,7 @@ async function fetchGameRound() {
 
 async function fetchPlayers() {
     try {
-        const res = await fetch('/api/admin/players');
+        const res = await fetch('/api/players');
         players = await res.json();
         if (!Array.isArray(players)) players = [];
         renderTeams(window.lastTeams || []);
@@ -146,12 +174,23 @@ async function fetchPlayers() {
 function renderActivePlayer(player) {
     const container = document.getElementById('active-player');
     const currentPlayer = players.find(p => p.is_current);
+    const hasActiveInitEvent = events && events.some(e => e.current && e.init);
 
-    container.innerHTML = `
+    console.log("[App] Has active init event:", hasActiveInitEvent);
+
+    if (hasActiveInitEvent) {
+        container.innerHTML = `
+        <span class="active-player">
+            Приготовится игроку: ${currentPlayer.name}
+        </span> 
+    `;
+    } else {
+        container.innerHTML = `
         <span class="active-player">
             Сейчас ходит: ${currentPlayer.name}
         </span> 
     `;
+    }
 }
 
 function renderGameRound(round) {
@@ -231,19 +270,32 @@ function createTeamCard(team) {
     const teamPlayers = players.filter(p => p.team_id === team.id);
 
     const playersHtml = teamPlayers.length > 0
-        ? teamPlayers.map(p => `
-        <div class="player-item">
-            <span>${p.name}</span>
-            <span class="player-status ${p.has_moved ? 'moved' : ''}">
-                ${p.has_moved ? '⛔️' : ''}
+        ? teamPlayers
+            .map(
+                (p) => `
+        <div 
+            class="player-item
+                ${p.has_moved ? 'player-moved' : ''}
+                ${p.is_current ? 'player-current' : ''}"
+            onclick="markPlayerMoved(event, ${p.id})"
+        >
+            <span 
+                class="player-name
+                    ${p.has_moved ? 'player-name-moved' : ''}
+                    ${p.is_current ? 'player-name' : ''}"
+            >
+                ${p.name}
             </span>
-            <span class="player-status ${p.is_current ? 'moved' : ''}">
-                ${p.is_current ? '🟢' : ''}
-            </span>
-            <button class="delete-player-btn" onclick="deletePlayer(${p.id})">❌</button>
+
+            <button class="delete-player-btn" onclick="deletePlayer(${p.id}); event.stopPropagation();">
+                ❌
+            </button>
         </div>
-      `).join('')
+    `
+            )
+            .join('')
         : '<div class="no-players">Игроков нет</div>';
+
 
     card.innerHTML += `
         <div class="players-box">
@@ -259,30 +311,14 @@ function createTeamCard(team) {
     return card;
 }
 
-// async function fetchGameRound() {
-//     try {
-//         const r = await fetch('/api/admin/game')
-//         round = await r.json();
-//
-//         renderGameRound(round);
-//     } catch (error) {
-//         console.error('Ошибка загрузки раундов:', error);
-//     }
-// }
-//
-// async function fetchPlayers() {
-//     try {
-//         const res = await fetch('/api/admin/players');
-//         players = await res.json();
-//         if (!Array.isArray(players)) players = [];
-//         renderTeams(window.lastTeams || []);
-//
-//         renderActivePlayer(players);
-//     } catch (err) {
-//         console.error('Ошибка загрузки игроков:', err);
-//         players = [];
-//     }
-// }
+function markPlayerMoved(event, id) {
+    // чтобы нажатие на кнопку delete не помечало игрока
+    if (event.target.closest(".delete-player-btn")) return;
+
+    fetch(`/api/players/${id}/move`, {
+        method: "PUT"
+    }).catch(err => console.error(err));
+}
 
 async function createPlayer(teamId) {
     const input = document.getElementById(`new-player-${teamId}`);
@@ -294,7 +330,7 @@ async function createPlayer(teamId) {
     }
 
     try {
-        const res = await fetch('/api/admin/players', {
+        const res = await fetch('/api/players', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, team_id: teamId })
@@ -316,7 +352,7 @@ async function deletePlayer(id) {
     if (!confirm('Удалить игрока?')) return;
 
     try {
-        const res = await fetch(`/api/admin/players/${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/players/${id}`, { method: 'DELETE' });
         if (!res.ok) throw new Error(await res.text());
 
         await fetchPlayers();
@@ -349,7 +385,7 @@ async function createTeam() {
     }
 
     try {
-        const res = await fetch('/api/admin/teams', {
+        const res = await fetch('/api/teams', {
             method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})
         });
 
@@ -373,7 +409,7 @@ async function updateName(id) {
     }
 
     try {
-        const res = await fetch(`/api/admin/teams/${id}/name`, {
+        const res = await fetch(`/api/teams/${id}/name`, {
             method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: newName})
         });
 
@@ -405,7 +441,7 @@ async function updateTeamStat(id, stat, delta, maxValue) {
     }
 
     try {
-        const res = await fetch(`/api/admin/teams/${id}/${stat}`, {
+        const res = await fetch(`/api/teams/${id}/${stat}`, {
             method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({delta})
         });
 
@@ -425,6 +461,7 @@ async function resetTeams() {
 }
 
 // ==================== РАБОТА СОБЫТИЯМИ ====================
+
 function displayCurrentEvent(events) {
     const container = document.getElementById('current-event-display');
     const nextEventBtn = document.getElementById('next-event-btn');
@@ -488,7 +525,7 @@ function displayCurrentEvent(events) {
 // Функция для переключения на следующее событие
 async function nextEvent() {
     try {
-        const res = await fetch('/api/admin/events/next', {
+        const res = await fetch('/api/events/next', {
             method: 'POST'
         });
 
@@ -512,14 +549,13 @@ async function nextEvent() {
 
 async function fetchEvents() {
     try {
-        console.log('Загрузка событий...');
-        const res = await fetch('/api/admin/events');
-        if (!res.ok) {
-            throw new Error(`HTTP error! status: ${res.status}`);
+        console.log('[App] Loads events...');
+        const r = await fetch('/api/events');
+        if (!r.ok) {
+            throw new Error(`HTTP error! status: ${r.status}`);
         }
 
-        const events = await res.json();
-        console.log('Получены события:', events);
+        events = await r.json();
 
         if (!events || !Array.isArray(events)) {
             console.warn('Сервер вернул не массив событий:', events);
@@ -828,7 +864,7 @@ async function saveEventChanges(eventId, currentEvent) {
         }
 
         // Обновляем данные события
-        const updateRes = await fetch(`/api/admin/events/${eventId}`, {
+        const updateRes = await fetch(`/api/events/${eventId}`, {
             method: 'PUT',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(updateData)
@@ -875,42 +911,6 @@ function escapeHtml(unsafe) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
-}
-
-function toggleEventStatus(eventId) {
-    eventsStatus[eventId] = !eventsStatus[eventId];
-
-    const eventCard = document.querySelector(`.event-card [onclick="deleteEvent(${eventId})"]`)?.closest('.event-card');
-    if (eventCard) {
-        eventCard.classList.add('status-changing');
-
-        // Переключаем класс completed
-        if (eventsStatus[eventId]) {
-            eventCard.classList.add('completed');
-        } else {
-            eventCard.classList.remove('completed');
-        }
-
-        setTimeout(() => {
-            eventCard.classList.remove('status-changing');
-        }, 500);
-    }
-
-    updateEventStatusOnServer(eventId, eventsStatus[eventId]);
-}
-
-async function updateEventStatusOnServer(eventId, completed) {
-    try {
-        const res = await fetch(`/api/admin/events/${eventId}/status`, {
-            method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({completed})
-        });
-
-        if (!res.ok) {
-            console.error('Ошибка обновления статуса события');
-        }
-    } catch (error) {
-        console.error('Ошибка обновления статуса:', error);
-    }
 }
 
 async function createNewEvent() {
@@ -961,15 +961,8 @@ async function createNewEvent() {
     }
 
     try {
-        // const payload = {
-        //
-        // }
-        //
-        console.log(JSON.stringify({
-            title, description, type, difficult, victory_effect, defeat_effect, requirement, init
-        }))
         // Создаём событие
-        const eventRes = await fetch('/api/admin/events', {
+        const eventRes = await fetch('/api/events', {
             method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({
                 title, description, type, difficult, victory_effect, defeat_effect, requirement, init
             })
@@ -998,7 +991,7 @@ async function uploadEventImage(eventId, file) {
     const formData = new FormData();
     formData.append('image', file);
 
-    const res = await fetch(`/api/admin/events/${eventId}/image`, {
+    const res = await fetch(`/api/events/${eventId}/image`, {
         method: 'POST', body: formData
     });
 
@@ -1011,6 +1004,7 @@ async function uploadEventImage(eventId, file) {
 }
 
 // ==================== УДАЛЕНИЕ И МОДАЛЬНЫЕ ОКНА ====================
+
 function deleteEvent(id) {
     showDeleteConfirmation(id);
 }
@@ -1095,7 +1089,7 @@ function showResetConfirmation() {
 
 async function confirmReset() {
     try {
-        const res = await fetch('/api/admin/teams/reset', {
+        const res = await fetch('/api/teams/reset', {
             method: 'POST'
         });
 
@@ -1129,7 +1123,7 @@ function closeResetModal() {
 
 async function confirmDelete(id) {
     try {
-        const res = await fetch(`/api/admin/events/${id}`, {
+        const res = await fetch(`/api/events/${id}`, {
             method: 'DELETE'
         });
 
