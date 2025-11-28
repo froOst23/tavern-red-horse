@@ -27,13 +27,13 @@ type Event struct {
 }
 
 type Player struct {
-	ID        int       `json:"id"`
-	Name      string    `json:"name"`
-	TeamID    int       `json:"team_id"`
-	TeamName  string    `json:"team_name,omitempty"`
-	HasMoved  bool      `json:"has_moved"`
-	IsCurrent bool      `json:"is_current"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	TeamID    int    `json:"team_id"`
+	TeamName  string `json:"team_name,omitempty"`
+	HasMoved  bool   `json:"has_moved"`
+	IsCurrent bool   `json:"is_current"`
+	TurnOrder int    `json:"turn_order,omitempty"`
 }
 
 type GameState struct {
