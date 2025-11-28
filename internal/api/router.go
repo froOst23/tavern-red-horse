@@ -47,9 +47,7 @@ func (a *App) NewRouter() *chi.Mux {
 		r.Post("/", a.CreatePlayer)
 		r.Put("/{id}/reset", a.ResetPlayerMove)
 		r.Put("/{id}/move", a.MarkPlayerMoved)
-		r.Put("/{id}/skip", a.SkipPlayerTurn)
 		r.Delete("/{id}", a.DeletePlayer)
-		r.Post("/turn-order", a.SetPlayerTurnOrder)
 	})
 
 	r.Route("/api/teams", func(r chi.Router) {
@@ -66,7 +64,6 @@ func (a *App) NewRouter() *chi.Mux {
 		r.Post("/next_round", a.NextRound)
 		r.Post("/reset_rounds", a.ResetRounds)
 		r.Post("/check_round", a.CheckRoundProgress)
-		r.Post("/arrange_turns", a.AutoArrangeTurnOrder)
 	})
 
 	r.Route("/viewer", func(r chi.Router) {
