@@ -14,12 +14,24 @@ let ws = null;
  * @property {team_id} team_id
  * @property {team_name} team_name
  * @property {has_moved} has_moved
- * @property {team_id} team_id
+ * @property {turn_order} turn_order
  */
 
 /** @type {Player|undefined} */
 let players = [];
 
+
+/**
+ * @typedef {Object} Player
+ * @property {name} name
+ * @property {team_id} team_id
+ * @property {team_name} team_name
+ * @property {has_moved} has_moved
+ * @property {turn_order} turn_order
+ */
+
+/** @type {Player|undefined} */
+let nextPlayer = [];
 /**
  * @typedef {Object} Round
  * @property {current_round} current_round
@@ -161,17 +173,37 @@ async function fetchPlayers() {
     try {
         const res = await fetch('/api/players');
         players = await res.json();
-        if (!Array.isArray(players)) players = [];
-        renderTeams(window.lastTeams || []);
 
-        renderActivePlayer(players);
+        if (!Array.isArray(players)) {
+            players = [];
+        } else {
+            // Сортируем по turn_order
+            players.sort((a, b) => a.turn_order - b.turn_order);
+        }
+
+        // Обновляем отображение команд
+        if (window.lastTeams) {
+            renderTeams(window.lastTeams);
+        }
+
+        // Получаем следующего игрока
+        try {
+            const r = await fetch('/api/players/next', { method: "GET" });
+            nextPlayer = await r.json();
+        } catch (err) {
+            console.error("[App] Error fetching next player:", err);
+            nextPlayer = null;
+        }
+
+        renderActivePlayer(players, nextPlayer);
+
     } catch (err) {
         console.error('Ошибка загрузки игроков:', err);
         players = [];
     }
 }
 
-function renderActivePlayer(player) {
+function renderActivePlayer(player, nextPlayer) {
     const container = document.getElementById('active-player');
     const currentPlayer = players.find(p => p.is_current);
     const hasActiveInitEvent = events && events.some(e => e.current && e.init);
@@ -188,7 +220,11 @@ function renderActivePlayer(player) {
         container.innerHTML = `
         <span class="active-player">
             Сейчас ходит: ${currentPlayer.name}
-        </span> 
+        </span>
+        <p/>
+        <span class="active-player">
+            Следующий ходит: ${nextPlayer.name}
+        </span>  
     `;
     }
 }
@@ -267,32 +303,46 @@ function createTeamCard(team) {
         </div>
     `;
 
-    const teamPlayers = players.filter(p => p.team_id === team.id);
+    const teamPlayers = players
+        .filter(p => p.team_id === team.id)
+        .sort((a, b) => a.turn_order - b.turn_order);
+
+    const maxOrder = Math.max(...players.map(p => p.turn_order), teamPlayers.length);
 
     const playersHtml = teamPlayers.length > 0
         ? teamPlayers
-            .map(
-                (p) => `
+            .map((p) => `
         <div 
             class="player-item
                 ${p.has_moved ? 'player-moved' : ''}
                 ${p.is_current ? 'player-current' : ''}"
             onclick="markPlayerMoved(event, ${p.id})"
         >
+            <input 
+                type="number" 
+                class="order-input"
+                min="1"
+                max="${maxOrder + 10}"  // Добавляем запас для новых игроков
+                value="${p.turn_order}"
+                onchange="updatePlayerOrder(${p.id}, this.value)"
+                onclick="event.stopPropagation();"
+                onfocus="this.select();"
+                onblur="validateOrderInput(this, ${p.id})"
+            />
+            
             <span 
                 class="player-name
                     ${p.has_moved ? 'player-name-moved' : ''}
-                    ${p.is_current ? 'player-name' : ''}"
+                    ${p.is_current ? 'player-name-current' : ''}"
             >
-                ${p.name}
+                ${p.name} - ${p.turn_order}
             </span>
 
             <button class="delete-player-btn" onclick="deletePlayer(${p.id}); event.stopPropagation();">
                 ❌
             </button>
         </div>
-    `
-            )
+    `)
             .join('')
         : '<div class="no-players">Игроков нет</div>';
 
@@ -311,13 +361,84 @@ function createTeamCard(team) {
     return card;
 }
 
-function markPlayerMoved(event, id) {
-    // чтобы нажатие на кнопку delete не помечало игрока
-    if (event.target.closest(".delete-player-btn")) return;
+function validateOrderInput(input, playerId) {
+    const value = parseInt(input.value);
+    const player = players.find(p => p.id === playerId);
 
-    fetch(`/api/players/${id}/move`, {
-        method: "PUT"
-    }).catch(err => console.error(err));
+    if (isNaN(value) || value < 1) {
+        input.value = player ? player.turn_order : 1;
+        showNotification('Порядковый номер должен быть положительным числом', 'error');
+    }
+}
+
+async function updatePlayerOrder(ID, newOrder) {
+    try {
+        // Валидация значения
+        newOrder = parseInt(newOrder);
+        if (isNaN(newOrder) || newOrder < 1) {
+            showNotification('Неверный порядковый номер', 'error');
+            return;
+        }
+
+        const response = await fetch(`/api/players/${ID}/order`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ turn_order: newOrder })
+        });
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error('Игрок не найден');
+            } else if (response.status === 400) {
+                throw new Error('Некорректный запрос');
+            }
+            throw new Error(`Ошибка сервера: ${response.status}`);
+        }
+
+        // Успешное обновление - обновляем состояние
+        await fetchGameState();
+        showNotification('Порядок игроков обновлен', 'success');
+
+    } catch (error) {
+        console.error('Error updating player order:', error);
+        showNotification(error.message || 'Ошибка при обновлении порядка', 'error');
+
+        // Перезагружаем данные, чтобы вернуть правильные значения
+        await fetchPlayers();
+    }
+}
+
+async function fetchGameState() {
+    try {
+        await Promise.all([
+            fetchTeams(),
+            fetchPlayers(),
+            fetchEvents(),
+            fetchGameRound()
+        ]);
+    } catch (error) {
+        console.error('Error fetching game state:', error);
+    }
+}
+
+
+
+async function markPlayerMoved(event, id) {
+    try {
+        // чтобы нажатие на кнопку delete не помечало игрока
+        if (event.target.closest(".delete-player-btn")) return;
+
+        fetch(`/api/players/${id}/move`, {
+            method: "PUT"
+        }).catch(err => console.error(err));
+
+    } catch (err) {
+        console.log(err);
+        showNotification("Не удалось пропустить ход", "error")
+    }
+
+
+
 }
 
 async function createPlayer(teamId) {

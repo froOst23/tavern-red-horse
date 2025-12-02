@@ -33,6 +33,7 @@ type Player struct {
 	TeamName  string    `json:"team_name,omitempty"`
 	HasMoved  bool      `json:"has_moved"`
 	IsCurrent bool      `json:"is_current"`
+	TurnOrder int       `json:"turn_order"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

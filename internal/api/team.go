@@ -221,12 +221,12 @@ func (a *App) ResetTeams(w http.ResponseWriter, r *http.Request) {
 	// Выбираем ход случайного игрока
 	_, err = a.DB.Exec(r.Context(), `
 		UPDATE players
-		SET is_current = true
-		WHERE id = (
-		SELECT id
-		FROM players
-		ORDER BY RANDOM()
-		LIMIT 1)
+		SET is_current = (id = (
+			SELECT id 
+			FROM players 
+			ORDER BY turn_order 
+			LIMIT 1
+		))
 	`)
 
 	// Сбрасываем счетчик раунда

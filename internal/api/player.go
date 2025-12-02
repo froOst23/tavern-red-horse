@@ -2,18 +2,20 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"red-horse-tavern/internal/models"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 func (a *App) GetPlayers(w http.ResponseWriter, r *http.Request) {
 	rows, err := a.DB.Query(r.Context(), `
-		SELECT id, name, team_id, has_moved, is_current, created_at
+		SELECT id, name, team_id, has_moved, is_current, turn_order
 		FROM players
-		ORDER BY id
+		ORDER BY turn_order
 	`)
 	if err != nil {
 		a.Log.Error("Failed to query players", "error", err)
@@ -25,7 +27,7 @@ func (a *App) GetPlayers(w http.ResponseWriter, r *http.Request) {
 	var players []models.Player
 	for rows.Next() {
 		var p models.Player
-		if err := rows.Scan(&p.ID, &p.Name, &p.TeamID, &p.HasMoved, &p.IsCurrent, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.TeamID, &p.HasMoved, &p.IsCurrent, &p.TurnOrder); err != nil {
 			a.Log.Error("Failed to scan players", "error", err)
 			http.Error(w, "Failed to scan player: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -134,5 +136,162 @@ func (a *App) DeletePlayer(w http.ResponseWriter, r *http.Request) {
 	a.broadcast(map[string]interface{}{
 		"type": "player_deleted",
 	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *App) GetNextPlayer(w http.ResponseWriter, r *http.Request) {
+	rows, err := a.DB.Query(r.Context(), `
+		WITH current_player AS (
+			SELECT turn_order 
+			FROM players 
+			WHERE is_current = true 
+			LIMIT 1
+		)
+		SELECT id, name, team_id, has_moved, is_current, turn_order
+		FROM players
+		WHERE turn_order = COALESCE(
+			-- Найти следующего по порядку
+			(SELECT MIN(turn_order) 
+			 FROM players 
+			 WHERE turn_order > (SELECT turn_order FROM current_player)),
+			-- Если следующего нет, взять минимальный (первый)
+			(SELECT MIN(turn_order) FROM players)
+		)
+		LIMIT 1;
+	`)
+
+	if err != nil {
+		a.Log.Error("Failed to get next player", "error", err)
+		http.Error(w, "Failed to get next player: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		// Можно вернуть пустой объект или сообщение
+		err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "No next player found",
+			"player":  nil,
+		})
+		if err != nil {
+			a.Log.Error("Failed to encode next player")
+			http.Error(w, "Failed to encode next player: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		return
+	}
+
+	var player struct {
+		ID        int64  `json:"id"`
+		Name      string `json:"name"`
+		TeamID    int64  `json:"team_id"`
+		HasMoved  bool   `json:"has_moved"`
+		IsCurrent bool   `json:"is_current"`
+		TurnOrder int    `json:"turn_order"`
+	}
+
+	err = rows.Scan(&player.ID, &player.Name, &player.TeamID, &player.HasMoved, &player.IsCurrent, &player.TurnOrder)
+	if err != nil {
+		a.Log.Error("Failed to scan player data", "error", err)
+		http.Error(w, "Failed to read player data: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Проверяем, нет ли еще строк (не должно быть, так как LIMIT 1)
+	if rows.Next() {
+		a.Log.Warn("Multiple players returned for next player query")
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(player)
+	if err != nil {
+		a.Log.Error("Failed to encode response", "error", err)
+		http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (a *App) UpdatePlayerOrder(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		a.Log.Error("Invalid player ID", "error", err)
+		http.Error(w, "Invalid player ID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		TurnOrder int `json:"turn_order"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		a.Log.Error("Invalid request", "error", err)
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.TurnOrder < 1 {
+		http.Error(w, "turn_order must be positive", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем текущий порядок игрока
+	var currentOrder int
+	err = a.DB.QueryRow(r.Context(),
+		"SELECT turn_order FROM players WHERE id = $1", id).Scan(&currentOrder)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "Player not found", http.StatusNotFound)
+		} else {
+			a.Log.Error("Failed to get player order", "error", err)
+			http.Error(w, "Failed to get player order", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Если порядок не изменился, ничего не делаем
+	if currentOrder == req.TurnOrder {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// Смещаем других игроков, чтобы освободить место
+	if req.TurnOrder < currentOrder {
+		// Двигаем вверх - сдвигаем игроков между новым и старым порядком вниз
+		_, err = a.DB.Exec(r.Context(), `
+			UPDATE players 
+			SET turn_order = turn_order + 1 
+			WHERE turn_order >= $1 AND turn_order < $2 AND id != $3
+		`, req.TurnOrder, currentOrder, id)
+	} else {
+		// Двигаем вниз - сдвигаем игроков между старым и новым порядком вверх
+		_, err = a.DB.Exec(r.Context(), `
+			UPDATE players 
+			SET turn_order = turn_order - 1 
+			WHERE turn_order > $1 AND turn_order <= $2 AND id != $3
+		`, currentOrder, req.TurnOrder, id)
+	}
+
+	if err != nil {
+		a.Log.Error("Failed to shift players", "error", err)
+		http.Error(w, "Failed to update order", http.StatusInternalServerError)
+		return
+	}
+
+	// Устанавливаем новый порядок игроку
+	_, err = a.DB.Exec(r.Context(),
+		"UPDATE players SET turn_order = $1 WHERE id = $2",
+		req.TurnOrder, id)
+
+	if err != nil {
+		a.Log.Error("Failed to update player order", "error", err)
+		http.Error(w, "Failed to update order", http.StatusInternalServerError)
+		return
+	}
+
+	a.broadcast(map[string]interface{}{
+		"type": "players_updated",
+	})
+
 	w.WriteHeader(http.StatusNoContent)
 }

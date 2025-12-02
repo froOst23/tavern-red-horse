@@ -44,9 +44,11 @@ func (a *App) NewRouter() *chi.Mux {
 
 	r.Route("/api/players", func(r chi.Router) {
 		r.Get("/", a.GetPlayers)
+		r.Get("/next", a.GetNextPlayer)
 		r.Post("/", a.CreatePlayer)
 		r.Put("/{id}/reset", a.ResetPlayerMove)
 		r.Put("/{id}/move", a.MarkPlayerMoved)
+		r.Put("/{id}/order", a.UpdatePlayerOrder)
 		r.Delete("/{id}", a.DeletePlayer)
 	})
 
@@ -61,9 +63,6 @@ func (a *App) NewRouter() *chi.Mux {
 
 	r.Route("/api/game", func(r chi.Router) {
 		r.Get("/", a.GetGameState)
-		r.Post("/next_round", a.NextRound)
-		r.Post("/reset_rounds", a.ResetRounds)
-		r.Post("/check_round", a.CheckRoundProgress)
 	})
 
 	r.Route("/viewer", func(r chi.Router) {

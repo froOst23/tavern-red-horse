@@ -33,6 +33,10 @@
 
                 <div class="event-container">
                     <div class="current-event-card">
+                        <button id="next-event-btn" class="magic-btn next-event-btn" onclick="nextEvent()" disabled>
+                            <span class="sparkle">🔄</span>
+                            Дальше!
+                        </button>
                         <h3>🎯 Текущее Событие</h3>
                         <div id="active-player"></div>
                         <div id="game-round"></div>
@@ -40,10 +44,6 @@
                             <div class="no-current-event">Нет активных событий</div>
                         </div>
                         <div>
-                            <button id="next-event-btn" class="magic-btn next-event-btn" onclick="nextEvent()" disabled>
-                                <span class="sparkle">🔄</span>
-                                Дальше!
-                            </button>
                         </div>
                     </div>
                 </div>

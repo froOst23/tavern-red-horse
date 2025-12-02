@@ -469,7 +469,16 @@ async function fetchPlayers() {
         players = await res.json();
         if (!Array.isArray(players)) players = [];
 
-        renderActivePlayer(players);
+        // Получаем следующего игрока
+        try {
+            const r = await fetch('/api/players/next', { method: "GET" });
+            nextPlayer = await r.json();
+        } catch (err) {
+            console.error("[App] Error fetching next player:", err);
+            nextPlayer = null;
+        }
+
+        renderActivePlayer(players, nextPlayer);
     } catch (err) {
         console.error('Ошибка загрузки игроков:', err);
         players = [];
@@ -487,7 +496,7 @@ function renderGameRound(round) {
     `;
 }
 
-function renderActivePlayer(player) {
+function renderActivePlayer(player, nextPlayer) {
     const container = document.getElementById('active-player');
     const currentPlayer = players.find(p => p.is_current);
     const hasActiveInitEvent = events && events.some(e => e.current && e.init);
@@ -504,6 +513,11 @@ function renderActivePlayer(player) {
                 Сейчас ходит: 
                 <span class="active-player">${currentPlayer.name}</span>
             </span> 
+                    <p/>
+            <span class="active-player-desc">
+                Следующий ходит: 
+                <span class="active-player">${nextPlayer.name}</span>
+            </span>  
         `;
     } else {
         container.innerHTML = `
