@@ -251,25 +251,39 @@ func (a *App) SwitchEvent(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Получаем полную информацию о текущем ивенте
+	// Получаем полную информацию о текущем событии
 	var currentEvent models.Event
 	err = tx.QueryRow(r.Context(),
-		`SELECT id, title, description, type, image_path, used, current, init, created_at 
-         FROM events WHERE current = true LIMIT 1`).
-		Scan(&currentEvent.ID, &currentEvent.Title, &currentEvent.Description,
-			&currentEvent.Type, &currentEvent.ImagePath, &currentEvent.Used,
-			&currentEvent.Current, &currentEvent.Init, &currentEvent.CreatedAt)
+		`SELECT id, title, description, 
+       				type, image_path, used, 
+       				current, init, created_at 
+         FROM events 
+         WHERE current = true LIMIT 1`).
+		Scan(
+			&currentEvent.ID,
+			&currentEvent.Title,
+			&currentEvent.Description,
+			&currentEvent.Type,
+			&currentEvent.ImagePath,
+			&currentEvent.Used,
+			&currentEvent.Current,
+			&currentEvent.Init,
+			&currentEvent.CreatedAt,
+		)
+	a.Log.Debug("Get current event", "id", currentEvent.ID, "title", currentEvent.Title)
 
 	// Если есть текущий ивент, помечаем его как использованный
 	if err == nil {
 		_, err = tx.Exec(r.Context(),
-			`UPDATE events SET used = true, current = false WHERE id = $1`,
-			currentEvent.ID)
+			`UPDATE events 
+			SET used = true, current = false 
+			WHERE id = $1`, currentEvent.ID)
 		if err != nil {
 			a.Log.Error("Failed to mark current event as used", "error", err)
 			http.Error(w, "Failed to mark current event as used: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		a.Log.Debug("Mark event as used", "id", currentEvent.ID, "title", currentEvent.Title)
 	}
 
 	// Получаем счетчик событий
@@ -282,6 +296,7 @@ func (a *App) SwitchEvent(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to get event counter: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.Log.Debug("Get event counter", "count", eventCounter)
 
 	// Логика выбора следующего ивента
 	nextCounter := eventCounter + 1
@@ -292,18 +307,32 @@ func (a *App) SwitchEvent(w http.ResponseWriter, r *http.Request) {
 	// Поиск init ивента
 	var initEvent models.Event
 	err = tx.QueryRow(r.Context(),
-		`SELECT id, title, description, type, image_path, used, init, created_at 
-         FROM events WHERE init = true AND used = false LIMIT 1`).
-		Scan(&initEvent.ID, &initEvent.Title, &initEvent.Description,
-			&initEvent.Type, &initEvent.ImagePath, &initEvent.Used,
-			&initEvent.Init, &initEvent.CreatedAt)
+		`SELECT id, title, description, 
+       				type, image_path, used,
+       				init, created_at 
+         FROM events 
+         WHERE init = true AND used = false 
+         LIMIT 1`).
+		Scan(&initEvent.ID,
+			&initEvent.Title,
+			&initEvent.Description,
+			&initEvent.Type,
+			&initEvent.ImagePath,
+			&initEvent.Used,
+			&initEvent.Init,
+			&initEvent.CreatedAt,
+		)
 
 	if err == nil {
+		a.Log.Debug("Get init event", "id", initEvent.ID, "title", initEvent.Title)
+
 		nextEvent = initEvent
 		found = true
 		// Для init ивентов не увеличиваем счетчик
 		_, err = tx.Exec(r.Context(),
-			`UPDATE game_state SET event_counter = event_counter WHERE id = 1`)
+			`UPDATE game_state 
+				SET event_counter = event_counter
+				WHERE id = 1`)
 		if err != nil {
 			a.Log.Error("Failed to update event counter", "error", err)
 			http.Error(w, "Failed to update event counter: "+err.Error(), http.StatusInternalServerError)

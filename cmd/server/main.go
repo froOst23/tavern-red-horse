@@ -25,7 +25,7 @@ func main() {
 
 	log := utils.SetupLogger(conf.App.LogLevel)
 	slog.SetDefault(log)
-	log.Info("Starting service...", "config", configPath)
+	log.Info("Starting service with config " + configPath)
 
 	// PostgreSQL setup
 	pg, err := storage.NewPostgresFromConfig(conf)
@@ -33,7 +33,6 @@ func main() {
 		log.Error("Failed to connect to Postgres", "error", err)
 		os.Exit(1)
 	}
-	log.Info("Connected to Postgres")
 
 	// Minio setup
 	minioClient, err := storage.NewMinioFromConfig(conf)
@@ -41,7 +40,6 @@ func main() {
 		log.Error("Failed to connect to Minio", "error", err)
 		os.Exit(1)
 	}
-	log.Info("Connected to Minio")
 
 	// Create app
 	app := api.NewApp(pg, minioClient.Client, conf, log)
