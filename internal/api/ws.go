@@ -24,7 +24,7 @@ func (a *App) EventWebSocket(w http.ResponseWriter, r *http.Request) {
 	a.clients[conn] = true
 	a.clientsMu.Unlock()
 
-	a.Log.Info("WebSocket client connected", "remote", r.RemoteAddr)
+	a.Log.Info("WebSocket client connected: " + r.RemoteAddr)
 
 	go a.sendInitialState(conn)
 

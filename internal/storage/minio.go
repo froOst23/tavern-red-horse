@@ -14,11 +14,6 @@ type MinioClient struct {
 }
 
 func NewMinioFromConfig(cfg *utils.AppConfig) (*MinioClient, error) {
-	slog.Info("Minio connection details",
-		"endpoint", cfg.Minio.Endpoint,
-		"access_key", cfg.Minio.AccessKey,
-		"use_ssl", cfg.Minio.UseSSL)
-
 	client, err := minio.New(cfg.Minio.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.Minio.AccessKey, cfg.Minio.SecretKey, ""),
 		Secure: cfg.Minio.UseSSL,
@@ -34,6 +29,7 @@ func NewMinioFromConfig(cfg *utils.AppConfig) (*MinioClient, error) {
 		return nil, err
 	}
 
-	slog.Info("Successfully connected to MinIO")
+	slog.Info("Connected to Minio: " + cfg.Minio.Endpoint)
+
 	return &MinioClient{Client: client}, nil
 }
