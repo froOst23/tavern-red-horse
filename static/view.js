@@ -295,6 +295,11 @@ function connectWebSocket() {
             case 'event_status_changed':
             case 'event_changed':
             case 'events_reset':
+            case 'player_moved':
+                console.log('[WebSocket] Players data changed, refreshing...');
+                fetchPlayers();
+                fetchEvents();
+                break;
             case 'world_reset':
                 console.log('[WebSocket] Events data changed, refreshing...');
                 fetchEvents();

@@ -142,20 +142,35 @@ func (a *App) DeletePlayer(w http.ResponseWriter, r *http.Request) {
 func (a *App) GetNextPlayer(w http.ResponseWriter, r *http.Request) {
 	rows, err := a.DB.Query(r.Context(), `
 		WITH current_player AS (
-			SELECT turn_order 
+			SELECT turn_order, team_id
 			FROM players 
 			WHERE is_current = true 
 			LIMIT 1
+		),
+		opposite_team AS (
+			SELECT id
+			FROM teams 
+			WHERE id != (SELECT team_id FROM current_player)
+			ORDER BY id 
+			LIMIT 1
+		),
+		next_player_without_move AS (
+			SELECT MIN(p.turn_order) as next_turn_order
+			FROM players p
+			WHERE p.turn_order > (SELECT turn_order FROM current_player)
+			  AND p.has_moved IS FALSE
+			  AND p.team_id = (SELECT id FROM opposite_team)
+		),
+		first_player_from_opposite_team AS (
+			SELECT MIN(p.turn_order) as first_turn_order
+			FROM players p
+			WHERE p.team_id = (SELECT id FROM opposite_team)
 		)
 		SELECT id, name, team_id, has_moved, is_current, turn_order
 		FROM players
 		WHERE turn_order = COALESCE(
-			-- Найти следующего по порядку
-			(SELECT MIN(turn_order) 
-			 FROM players 
-			 WHERE turn_order > (SELECT turn_order FROM current_player)),
-			-- Если следующего нет, взять минимальный (первый)
-			(SELECT MIN(turn_order) FROM players)
+			(SELECT next_turn_order FROM next_player_without_move),
+			(SELECT first_turn_order FROM first_player_from_opposite_team)
 		)
 		LIMIT 1;
 	`)
