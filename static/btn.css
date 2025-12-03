@@ -1,0 +1,46 @@
+.box-button {
+    cursor: pointer;
+    padding-bottom: 10px;
+    transition: 0.05s ease-in-out;
+    user-select: none;
+    max-width: 200px;
+    color: #000000;
+}
+
+.box-button-common {
+    border: 4px solid black;
+    background-color: gray;
+}
+
+.box-button-danger {
+    border: 4px solid black;
+    background-color: #b25433;
+}
+
+.button-common {
+    background-color: #dddddd;
+    border: 4px solid #fff;
+}
+
+.button-danger {
+    background-color: #fa8054;
+    border: 4px solid #f9a17f;
+}
+
+.button {
+    cursor: pointer;
+    padding: 3px 8px;
+    width: calc(100%);
+    color: #000000;
+}
+
+.button span {
+    font-size: 1.2em;
+    letter-spacing: 1px;
+}
+
+.box-button:active {
+    padding: 0;
+    margin-bottom: 10px;
+    transform: translateY(10px);
+}

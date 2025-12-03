@@ -23,20 +23,29 @@
                         <h3>✨ Призвать команду</h3>
                         <div class="input-group">
                             <input type="text" id="new-team-name" class="enchanted-input" placeholder="Начертать имя команды...">
-                            <button id="create-team-btn" class="magic-btn" onclick="createTeam()">
-                                <span class="sparkle">✨</span>
-                                Создать
-                            </button>
+
+                            <div class="box-button">
+                                <div class="center">
+                                    <div class="box-button box-button-common">
+                                        <button id="create-team-btn" class="button button-common" onclick="createTeam()">
+                                            <span>✨ Создать</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="event-container">
                     <div class="current-event-card">
-                        <button id="next-event-btn" class="magic-btn next-event-btn" onclick="nextEvent()" disabled>
-                            <span class="sparkle">🔄</span>
-                            Дальше!
-                        </button>
+                        <div class="center" style="margin-top: 20px;">
+                            <div class="box-button box-button-common">
+                                <button id="next-event-btn" class="button button-common" onclick="nextEvent()" >
+                                    <span>🔄 Дальше!</span>
+                                </button>
+                            </div>
+                        </div>
                         <h3>🎯 Текущее Событие</h3>
                         <div id="active-player"></div>
                         <div id="game-round"></div>
@@ -49,9 +58,13 @@
                 </div>
 
                 <div class="reset-section">
-                    <button id="reset-btn" class="danger-btn ancient" onclick="resetTeams()">
-                        🔥 Перерождение мира
-                    </button>
+                    <div class="center">
+                        <div class="box-button box-button-danger">
+                            <button id="reset-btn" class="button button-danger" onclick="resetTeams()">
+                                <span>🔥 Перерождение</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -102,10 +115,13 @@
                             <div id="file-name" ></div>
                             <input type="file" id="new-event-image" class="file-input" accept="image/*">
                         </div>
-                        <button class="magic-btn" id="create-event-btn">
-                            <span class="sparkle">🌟</span>
-                            Создать
-                        </button>
+                        <div class="center">
+                            <div class="box-button box-button-common">
+                                <button id="create-event-btn" class="button button-common">
+                                    <span>✨ Создать</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div style="display: flex; flex-direction: row; align-items: center; justify-content: space-around;">

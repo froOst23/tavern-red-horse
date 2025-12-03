@@ -345,13 +345,33 @@ func (a *App) SwitchEvent(w http.ResponseWriter, r *http.Request) {
 		// Логика для азартных игр и обычных событий
 		if isThirdEvent {
 			err = tx.QueryRow(r.Context(),
-				`SELECT id, title, description, 
-       						type, image_path, used, 
-       						init, created_at 
-					 FROM events 
-					 WHERE type = 'Азартная игра' AND used = false 
-					 ORDER BY RANDOM() 
-					 LIMIT 1`).
+				`WITH has_used_gambling AS (
+						SELECT EXISTS (
+							SELECT 1 FROM events 
+							WHERE type = 'Азартная игра' AND used = true
+						) AS exists_used
+					)
+					SELECT id, title, description, 
+						   type, image_path, used, 
+						   init, created_at 
+					FROM events 
+					WHERE type = 'Азартная игра' 
+					  AND used = false
+					  AND (
+						  -- Условие 1: если есть использованные азартные игры, ищем "Бирпонг"
+						  (title = 'Бирпонг' AND (SELECT exists_used FROM has_used_gambling))
+						  OR
+						  -- Условие 2: если нет использованных или "Бирпонг" не найден, берём любую
+						  (NOT (SELECT exists_used FROM has_used_gambling))
+					  )
+					ORDER BY 
+						-- Приоритет для "Бирпонг", если есть использованные игры
+						CASE 
+							WHEN (SELECT exists_used FROM has_used_gambling) AND title = 'Бирпонг' THEN 1
+							ELSE 2
+						END,
+						RANDOM()
+					LIMIT 1`).
 				Scan(
 					&nextEvent.ID,
 					&nextEvent.Title,
@@ -497,139 +517,107 @@ func (a *App) SwitchEvent(w http.ResponseWriter, r *http.Request) {
 	shouldSkipPlayerSwitch := currentEvent.Init
 
 	if !shouldSkipPlayerSwitch {
-
-		// 1. Получаем текущего игрока
-		var currentPlayerID, currentTeamID int
-
+		// 1. Снимаем is_current с текущего игрока
+		var currentPlayerID int
 		err = tx.QueryRow(r.Context(),
 			`UPDATE players
          SET has_moved = true, is_current = false
          WHERE is_current = true
-         RETURNING id, team_id`,
-		).Scan(&currentPlayerID, &currentTeamID)
+         RETURNING id`,
+		).Scan(&currentPlayerID)
 
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, "Failed to update current player: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		// Определяем противоположную команду
-		var nextTeamID int
-		err = tx.QueryRow(r.Context(),
-			`SELECT id FROM teams WHERE id != $1 ORDER BY id LIMIT 1`,
-			currentTeamID,
-		).Scan(&nextTeamID)
+		// 2. Сколько у нас игроков — нужно для защиты от потенциального бесконечного цикла
+		var playerCount int
+		err = tx.QueryRow(r.Context(), `SELECT COUNT(1) FROM players`).Scan(&playerCount)
 		if err != nil {
-			http.Error(w, "Failed to determine next team: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Failed to get players count: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if playerCount == 0 {
+			http.Error(w, "No players found", http.StatusInternalServerError)
 			return
 		}
 
-		// 2. Ищем следующего игрока в противоположной команде
-		var nextPlayerID int
-		var hasMoved bool
-
-		// Сначала ищем игрока, который еще не ходил и не пропущен
-		err = tx.QueryRow(r.Context(),
-			`SELECT id, has_moved
-         FROM players
-         WHERE team_id = $1 AND skip_count = 0
-         ORDER BY has_moved ASC, turn_order ASC
-         LIMIT 1`,
-			nextTeamID,
-		).Scan(&nextPlayerID, &hasMoved)
-
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			http.Error(w, "Failed to select next player: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// Если все игроки команды уже ходили
-		if errors.Is(err, pgx.ErrNoRows) || hasMoved {
-			// 3. Сбрасываем флаги ходов для всей команды
-			_, err = tx.Exec(r.Context(),
-				`UPDATE players SET has_moved = false WHERE team_id = $1`,
-				nextTeamID,
-			)
-			if err != nil {
-				http.Error(w, "Failed to reset team moves: "+err.Error(), http.StatusInternalServerError)
+		// 3. Цикл выбора следующего игрока
+		attempts := 0
+		for {
+			if attempts > playerCount*2 { // защита на всякий случай
+				http.Error(w, "Failed to pick next player: too many attempts", http.StatusInternalServerError)
 				return
 			}
+			attempts++
 
-			// Берем первого игрока команды по turn_order
+			// 3.1. Берём первого игрока, который ещё не ходил
+			var candidateID int
+			var candidateSkip bool
+
 			err = tx.QueryRow(r.Context(),
-				`SELECT id
+				`SELECT id, skip
              FROM players
-             WHERE team_id = $1 AND skip_count = 0
+             WHERE has_moved = false
              ORDER BY turn_order ASC
              LIMIT 1`,
-				nextTeamID,
-			).Scan(&nextPlayerID)
+			).Scan(&candidateID, &candidateSkip)
 
 			if err != nil {
-				http.Error(w, "Failed to pick first player after reset: "+err.Error(), http.StatusInternalServerError)
+				if errors.Is(err, pgx.ErrNoRows) {
+					// Все игроки уже ходили -> начинаем новый раунд
+					_, err = tx.Exec(r.Context(), `UPDATE players SET has_moved = false`)
+					if err != nil {
+						http.Error(w, "Failed to reset moves: "+err.Error(), http.StatusInternalServerError)
+						return
+					}
+
+					_, err = tx.Exec(r.Context(),
+						`UPDATE game_state SET current_round = current_round + 1 WHERE id = 1`,
+					)
+					if err != nil {
+						http.Error(w, "Failed to increment round: "+err.Error(), http.StatusInternalServerError)
+						return
+					}
+
+					// после сброса идём в начало цикла и попробуем снова выбрать кандидата
+					continue
+				} else {
+					http.Error(w, "Failed to select next candidate: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+			}
+
+			// 3.2. Если кандидат в skip — срабатывает поведение "пропускаем его ход":
+			//      снимаем skip, отмечаем как ходившего (has_moved = true) и выбираем дальше
+			if candidateSkip {
+				_, err = tx.Exec(r.Context(),
+					`UPDATE players
+                 SET skip = false, has_moved = true
+                 WHERE id = $1`,
+					candidateID,
+				)
+				if err != nil {
+					http.Error(w, "Failed to clear skip and mark moved: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+				// и продолжаем цикл — ищем следующего
+				continue
+			}
+
+			// 3.3. Если кандидат не в skip — назначаем его current и выходим
+			_, err = tx.Exec(r.Context(),
+				`UPDATE players SET is_current = true WHERE id = $1`,
+				candidateID,
+			)
+			if err != nil {
+				http.Error(w, "Failed to set next player: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 
-			// 4. Проверяем, была ли это последняя команда в раунде
-			var allTeamsMoved bool
-			err = tx.QueryRow(r.Context(),
-				`SELECT NOT EXISTS (
-                SELECT 1 
-                FROM players p1
-                WHERE p1.skip_count = 0 
-                  AND p1.has_moved = false
-                  AND p1.team_id != $1
-            )`,
-				nextTeamID,
-			).Scan(&allTeamsMoved)
-
-			if err != nil {
-				http.Error(w, "Failed to check full state: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			// Если все команды закончили раунд
-			if allTeamsMoved {
-				// Сбрасываем ходы у ВСЕХ игроков
-				_, err = tx.Exec(r.Context(),
-					`UPDATE players SET has_moved = false WHERE skip_count = 0`,
-				)
-				if err != nil {
-					http.Error(w, "Failed to full reset moves: "+err.Error(), http.StatusInternalServerError)
-					return
-				}
-
-				// Уменьшаем skip_count у тех, у кого он > 0
-				_, err = tx.Exec(r.Context(),
-					`UPDATE players 
-                 SET skip_count = skip_count - 1 
-                 WHERE skip_count > 0`,
-				)
-				if err != nil {
-					http.Error(w, "Failed to decrement skip counts: "+err.Error(), http.StatusInternalServerError)
-					return
-				}
-
-				// Увеличиваем раунд
-				_, err = tx.Exec(r.Context(),
-					`UPDATE game_state SET current_round = current_round + 1 WHERE id = 1`,
-				)
-				if err != nil {
-					http.Error(w, "Failed to increment round: "+err.Error(), http.StatusInternalServerError)
-					return
-				}
-			}
-		}
-
-		// 5. Назначаем следующего игрока
-		_, err = tx.Exec(r.Context(),
-			`UPDATE players SET is_current = true WHERE id = $1`,
-			nextPlayerID,
-		)
-
-		if err != nil {
-			http.Error(w, "Failed to set next player: "+err.Error(), http.StatusInternalServerError)
-			return
+			// успешно назначили next current
+			break
 		}
 	} else {
 		a.Log.Debug("Skipping because previous event was init")

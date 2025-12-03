@@ -209,13 +209,14 @@ func (a *App) ResetTeams(w http.ResponseWriter, r *http.Request) {
 	// Сбрасываем ход игроков
 	_, err = a.DB.Exec(r.Context(), `
 		UPDATE players
-		SET has_moved = false, is_current = false
+		SET has_moved = false, is_current = false, skip = false
 	`)
 
 	// Выбираем следующего игрока
 	_, err = a.DB.Exec(r.Context(), `
 		UPDATE players
 		SET has_moved = false, is_current = false
+		WHERE skip = true
 	`)
 
 	// Выбираем ход случайного игрока

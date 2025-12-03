@@ -13,7 +13,9 @@ import (
 
 func (a *App) GetPlayers(w http.ResponseWriter, r *http.Request) {
 	rows, err := a.DB.Query(r.Context(), `
-		SELECT id, name, team_id, has_moved, is_current, turn_order
+		SELECT id, name, team_id, 
+		       has_moved, is_current, 
+		       turn_order, skip
 		FROM players
 		ORDER BY turn_order
 	`)
@@ -27,7 +29,15 @@ func (a *App) GetPlayers(w http.ResponseWriter, r *http.Request) {
 	var players []models.Player
 	for rows.Next() {
 		var p models.Player
-		if err := rows.Scan(&p.ID, &p.Name, &p.TeamID, &p.HasMoved, &p.IsCurrent, &p.TurnOrder); err != nil {
+		if err := rows.Scan(
+			&p.ID,
+			&p.Name,
+			&p.TeamID,
+			&p.HasMoved,
+			&p.IsCurrent,
+			&p.TurnOrder,
+			&p.Skip,
+		); err != nil {
 			a.Log.Error("Failed to scan players", "error", err)
 			http.Error(w, "Failed to scan player: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -55,15 +65,19 @@ func (a *App) CreatePlayer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := a.DB.Exec(r.Context(),
-		`INSERT INTO players (name, team_id) VALUES ($1, $2)`,
-		body.Name, body.TeamID,
-	)
+	var maxTurnOrder int
+	err := a.DB.QueryRow(r.Context(),
+		`SELECT COALESCE(MAX(turn_order), 0) FROM players`).Scan(&maxTurnOrder)
 	if err != nil {
-		a.Log.Error("Failed to create player", "error", err)
-		http.Error(w, "Failed to create player: "+err.Error(), http.StatusInternalServerError)
+		a.Log.Error("Failed to get max turn_order", "error", err)
+		http.Error(w, "Failed to get max turn_order: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	_, err = a.DB.Exec(r.Context(),
+		`INSERT INTO players (name, team_id, turn_order) VALUES ($1, $2, $3)`,
+		body.Name, body.TeamID, maxTurnOrder+1,
+	)
 
 	w.WriteHeader(http.StatusCreated)
 	a.broadcast(map[string]interface{}{
@@ -82,7 +96,8 @@ func (a *App) MarkPlayerMoved(w http.ResponseWriter, r *http.Request) {
 
 	// Переключение значения has_moved
 	_, err = a.DB.Exec(r.Context(),
-		`UPDATE players SET has_moved = NOT has_moved WHERE id = $1`,
+		`UPDATE players SET skip = NOT skip
+               WHERE id = $1`,
 		id,
 	)
 	if err != nil {
@@ -142,36 +157,34 @@ func (a *App) DeletePlayer(w http.ResponseWriter, r *http.Request) {
 func (a *App) GetNextPlayer(w http.ResponseWriter, r *http.Request) {
 	rows, err := a.DB.Query(r.Context(), `
 		WITH current_player AS (
-			SELECT turn_order, team_id
-			FROM players 
-			WHERE is_current = true 
+			SELECT id, turn_order
+			FROM players
+			WHERE is_current = true
 			LIMIT 1
 		),
-		opposite_team AS (
-			SELECT id
-			FROM teams 
-			WHERE id != (SELECT team_id FROM current_player)
-			ORDER BY id 
-			LIMIT 1
-		),
-		next_player_without_move AS (
-			SELECT MIN(p.turn_order) as next_turn_order
-			FROM players p
-			WHERE p.turn_order > (SELECT turn_order FROM current_player)
-			  AND p.has_moved IS FALSE
-			  AND p.team_id = (SELECT id FROM opposite_team)
-		),
-		first_player_from_opposite_team AS (
-			SELECT MIN(p.turn_order) as first_turn_order
-			FROM players p
-			WHERE p.team_id = (SELECT id FROM opposite_team)
+		next_player_turn AS (
+			SELECT COALESCE(
+				(SELECT MIN(p.turn_order)
+				 FROM players p
+				 JOIN current_player c ON true
+				 WHERE p.turn_order > c.turn_order
+				   AND p.has_moved = false
+				   AND p.skip = false),
+				(SELECT MIN(p.turn_order)
+				 FROM players p
+				 WHERE p.has_moved = false
+				   AND p.skip = false
+				   AND p.id != (SELECT id FROM current_player)),
+				(SELECT MIN(p.turn_order)
+				 FROM players p
+				 WHERE p.skip = false
+				   AND p.id != (SELECT id FROM current_player))
+			) as next_order
 		)
 		SELECT id, name, team_id, has_moved, is_current, turn_order
 		FROM players
-		WHERE turn_order = COALESCE(
-			(SELECT next_turn_order FROM next_player_without_move),
-			(SELECT first_turn_order FROM first_player_from_opposite_team)
-		)
+		WHERE turn_order = (SELECT next_order FROM next_player_turn)
+		  AND skip = false
 		LIMIT 1;
 	`)
 
@@ -183,15 +196,63 @@ func (a *App) GetNextPlayer(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	if !rows.Next() {
-		// Можно вернуть пустой объект или сообщение
-		err := json.NewEncoder(w).Encode(map[string]interface{}{
-			"message": "No next player found",
+		// Проверяем, все ли игроки уже сходили
+		rows2, err := a.DB.Query(r.Context(), `
+			SELECT id, name, team_id, has_moved, is_current, turn_order
+			FROM players
+			WHERE turn_order = (
+				SELECT MIN(turn_order) FROM players
+			)
+			LIMIT 1
+		`)
+
+		if err != nil {
+			a.Log.Error("Failed to get first player", "error", err)
+			err := json.NewEncoder(w).Encode(map[string]interface{}{
+				"message": "No players available",
+				"player":  nil,
+			})
+			if err != nil {
+				http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
+		defer rows2.Close()
+
+		if rows2.Next() {
+			var player struct {
+				ID        int64  `json:"id"`
+				Name      string `json:"name"`
+				TeamID    int64  `json:"team_id"`
+				HasMoved  bool   `json:"has_moved"`
+				IsCurrent bool   `json:"is_current"`
+				TurnOrder int    `json:"turn_order"`
+			}
+
+			err = rows2.Scan(&player.ID, &player.Name, &player.TeamID, &player.HasMoved, &player.IsCurrent, &player.TurnOrder)
+			if err != nil {
+				a.Log.Error("Failed to scan player data", "error", err)
+				http.Error(w, "Failed to read player data: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			err = json.NewEncoder(w).Encode(player)
+			if err != nil {
+				a.Log.Error("Failed to encode response", "error", err)
+				http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
+
+		// Если вообще нет игроков
+		err = json.NewEncoder(w).Encode(map[string]interface{}{
+			"message": "No players found",
 			"player":  nil,
 		})
 		if err != nil {
 			a.Log.Error("Failed to encode next player")
 			http.Error(w, "Failed to encode next player: "+err.Error(), http.StatusInternalServerError)
-			return
 		}
 		return
 	}

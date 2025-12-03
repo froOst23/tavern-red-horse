@@ -14,7 +14,9 @@ let ws = null;
  * @property {team_id} team_id
  * @property {team_name} team_name
  * @property {has_moved} has_moved
+ * @property {is_current} is_current
  * @property {turn_order} turn_order
+ * @property {skip} skip
  */
 
 /** @type {Player|undefined} */
@@ -27,7 +29,9 @@ let players = [];
  * @property {team_id} team_id
  * @property {team_name} team_name
  * @property {has_moved} has_moved
+ * @property {is_current} is_current
  * @property {turn_order} turn_order
+ * @property {skip} skip
  */
 
 /** @type {Player|undefined} */
@@ -270,34 +274,64 @@ function createTeamCard(team) {
                id="team-name-${team.id}" 
                value="${team.name}" 
                placeholder="Название команды">
-        <button class="action-btn magic-btn" onclick="updateName(${team.id})">
-            ✏️ Сменить имя
-        </button>
+        <div class="center">
+            <div class="box-button box-button-common">        
+                <button class="button button-common" onclick="updateName(${team.id})">
+                    <span>✏️ Сменить имя</span>
+                </button>
+            </div>
+        </div>
         
         <div class="stats-container">
             <div class="stat-group">
                 <span class="stat-label">❤️ Здоровье</span>
                 <div class="stat-value" id="health-${team.id}">${team.health}</div>
                 <div class="controls">
-                    <button class="control-btn" 
-                            onclick="changeHealth(${team.id}, -1)" 
-                            ${healthAtMin ? 'disabled' : ''}>-</button>
-                    <button class="control-btn" 
-                            onclick="changeHealth(${team.id}, 1)" 
-                            ${healthAtMax ? 'disabled' : ''}>+</button>
+                    
+                    <div class="center"">
+                        <div class="box-button box-button-danger" style="margin-right: 5px;">
+                            <button class="button button-danger" 
+                                    onclick="changeHealth(${team.id}, -1)" 
+                                    ${healthAtMin ? 'disabled' : ''}
+                                    style="width: 35px;">
+                                <span>-</span>
+                            </button>
+                        </div>
+                        <div class="box-button box-button-common">
+                            <button class="button button-common" 
+                                    onclick="changeHealth(${team.id}, 1)" 
+                                    ${healthAtMax ? 'disabled' : ''}
+                                    style="width: 35px;">
+                                <span>+</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             
             <div class="stat-group">
                 <span class="stat-label">🍺 Опьянение</span>
                 <div class="stat-value" id="drunk-${team.id}">${team.drunk}</div>
-                <div class="controls">
-                    <button class="control-btn" 
-                            onclick="changeDrunk(${team.id}, -1)" 
-                            ${drunkAtMin ? 'disabled' : ''}>-</button>
-                    <button class="control-btn" 
-                            onclick="changeDrunk(${team.id}, 1)" 
-                            ${drunkAtMax ? 'disabled' : ''}>+</button>
+                    <div class="controls">
+                        <div class="center"">
+                            <div class="box-button box-button-danger" style="margin-right: 5px;">
+                                <button class="button button-danger" 
+                                        onclick="changeDrunk(${team.id}, -1)" 
+                                        ${drunkAtMin ? 'disabled' : ''}
+                                        style="width: 35px;">
+                                    <span>-</span>
+                                </button>
+                            </div>
+                            <div class="box-button box-button-common">
+                                <button class="button button-common" 
+                                        onclick="changeDrunk(${team.id}, 1)" 
+                                        ${drunkAtMax ? 'disabled' : ''}
+                                        style="width: 35px;">
+                                    <span>+</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -315,7 +349,8 @@ function createTeamCard(team) {
         <div 
             class="player-item
                 ${p.has_moved ? 'player-moved' : ''}
-                ${p.is_current ? 'player-current' : ''}"
+                ${p.is_current ? 'player-current' : ''}
+                ${p.skip ? 'player-skip' : ''}"
             onclick="markPlayerMoved(event, ${p.id})"
         >
             <input 
@@ -334,8 +369,9 @@ function createTeamCard(team) {
                 class="player-name
                     ${p.has_moved ? 'player-name-moved' : ''}
                     ${p.is_current ? 'player-name-current' : ''}"
+                    
             >
-                ${p.name} - ${p.turn_order}
+                ${p.name}
             </span>
 
             <button class="delete-player-btn" onclick="deletePlayer(${p.id}); event.stopPropagation();">
@@ -354,7 +390,13 @@ function createTeamCard(team) {
                 ${playersHtml}
             </div>
             <input type="text" id="new-player-${team.id}" class="enchanted-input" placeholder="Имя игрока">
-            <button class="magic-btn" onclick="createPlayer(${team.id})">Добавить игрока</button>
+            <div class="center">
+                <div class="box-button box-button-common">        
+                    <button class="button button-common" onclick="createPlayer(${team.id})">
+                        <span>Добавить игрока</span>
+                    </button>
+                </div>
+            </div>
         </div>
     `;
 
@@ -421,8 +463,6 @@ async function fetchGameState() {
     }
 }
 
-
-
 async function markPlayerMoved(event, id) {
     try {
         // чтобы нажатие на кнопку delete не помечало игрока
@@ -436,9 +476,6 @@ async function markPlayerMoved(event, id) {
         console.log(err);
         showNotification("Не удалось пропустить ход", "error")
     }
-
-
-
 }
 
 async function createPlayer(teamId) {
@@ -885,14 +922,20 @@ function showEditEventModal(event) {
             </div>
 
             <div style="display: flex; gap: 15px; justify-content: center; margin-top: 20px;">
-                <button id="edit-cancel-btn" class="magic-btn" 
-                        style="background: linear-gradient(135deg, #8B4513, #a0522d);">
-                    Отмена
-                </button>
-                <button id="edit-save-btn" class="magic-btn" 
-                        style="background: linear-gradient(135deg, #1976d2, #1565c0);">
-                    Сохранить
-                </button>
+                <div class="center"">
+                    <div class="box-button box-button-common" style="margin-right: 20px">
+                        <button class="button button-common" 
+                                id="edit-cancel-btn"
+                            <span>Отмена</span>
+                        </button>
+                    </div>
+                    <div class="box-button box-button-common">
+                        <button class="button button-common" 
+                                id="edit-save-btn" 
+                            <span>Сохранить</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     `;
@@ -1170,18 +1213,20 @@ function showResetConfirmation() {
                 <em style="font-size: 14px; color: #8B4513;">Это действие необратимо!</em>
             </p>
             <div style="display: flex; gap: 15px; justify-content: center;">
-                <button id="magic-reset-cancel-btn" 
-                        style="padding: 12px 25px; background: linear-gradient(135deg, #8B4513, #a0522d); 
-                               color: #ffd700; border: 2px solid #ffd700; border-radius: 8px; 
-                               cursor: pointer; font-weight: bold;">
-                    Отмена
-                </button>
-                <button id="magic-reset-confirm-btn" 
-                        style="padding: 12px 25px; background: linear-gradient(135deg, #c41e3a, #8B0000); 
-                               color: white; border: 2px solid #ff6b6b; border-radius: 8px; 
-                               cursor: pointer; font-weight: bold;">
-                    Переродить Мир!
-                </button>
+                <div class="center">
+                    <div class="box-button box-button-common">
+                        <button id="magic-reset-cancel-btn" class="button button-common">
+                            <span>Отмена</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="center">
+                    <div class="box-button box-button-danger">
+                        <button id="magic-reset-confirm-btn" class="button button-danger">
+                            <span>Переродить Мир!</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     `;

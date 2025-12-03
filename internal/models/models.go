@@ -34,6 +34,7 @@ type Player struct {
 	HasMoved  bool      `json:"has_moved"`
 	IsCurrent bool      `json:"is_current"`
 	TurnOrder int       `json:"turn_order"`
+	Skip      bool      `json:"skip"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
