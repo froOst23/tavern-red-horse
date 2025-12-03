@@ -10,13 +10,13 @@
     --gold: #ffd700;
     --accent-red: #c41e3a;
     --card-bg: #f4e4bc;
-    --wood: #8B4513;
+    --wood: #392516;
 }
 
 /* Общий фон */
 body {
     background: var(--bg-dark);
-    font-family: 'Georgia', serif;
+    font-family: 'Verdana', cursive;
     display: flex;
     flex-direction: column;
     align-items: center;

@@ -132,7 +132,7 @@ function renderTeamFlask(health, drunk, options = {}) {
                 </g>
                     
                 <!-- ЦИФРЫ -->
-                <g fill="#e6e6e6" font-size="${10 * scale}" font-family="Georgia" text-anchor="middle">
+                <g fill="#e6e6e6" font-size="${10 * scale}" font-family="'Verdana', cursive;" text-anchor="middle">
                     ${Array.from({ length: MAX + 1 }).map((_, i) => {
                     const y = baseY + (3 * scale) - (i * (H / MAX));
                     // Цифры слева, напротив рисок

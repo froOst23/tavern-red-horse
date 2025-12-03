@@ -58,7 +58,7 @@ h1 {
 }
 
 h2 {
-    color: #f2b651;
+    color: #ffffff;
     margin: 30px 0 20px 0;
     text-align: center;
     font-size: clamp(1.5rem, 3vw, 2.2rem);
@@ -141,8 +141,6 @@ h3 {
 }
 
 /* Карточки */
-.team-card,
-.event-card,
 .magic-card {
     background: linear-gradient(135deg, #fff8e1, #ffecb3);
     border-radius: 15px;
@@ -155,6 +153,23 @@ h3 {
     text-align: center;
     box-shadow: 0 8px 16px rgba(139, 69, 19, 0.4),
     inset 0 0 30px rgba(255, 215, 0, 0.2);
+    position: relative;
+}
+
+.team-card,
+.event-card,
+.magic-card,
+.current-event-card {
+    background: linear-gradient(135deg, #fff8e1, #ffecb3);
+    border: 3px solid var(--wood);
+    box-shadow: 8px 8px 0 #9a9894;
+    border-radius: 15px;
+    flex: 1 1 320px;
+    max-width: 600px;
+    padding: 18px;
+    margin: 5px 5px 15px;
+    box-sizing: border-box;
+    text-align: center;
     position: relative;
 }
 
@@ -184,7 +199,7 @@ h3 {
     text-align: center;
     resize: vertical;
     transition: all 0.3s ease;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 4px 4px 0 #9a9894;
 }
 
 .enchanted-input:focus {
@@ -210,6 +225,7 @@ h3 {
     text-align: center;
     transition: all 0.3s ease;
     margin-bottom: 15px;
+    box-shadow: 4px 4px 0 #9a9894;
 }
 
 .file-input {
@@ -509,7 +525,7 @@ h3 {
     padding-left: 20px;
     padding-right: 20px;
     width: 80%;
-    border-radius: 15px;
+    /*border-radius: 15px;*/
     align-items: center;
     text-align: center;
 }
@@ -660,6 +676,7 @@ h3 {
     border-radius: 8px;
     margin-bottom: 5px;
     cursor: pointer;
+    box-shadow: 3px 3px 0 #9a9894;
 }
 
 /* Игрок уже ходил */
