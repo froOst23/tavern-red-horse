@@ -239,23 +239,22 @@ function displayActiveEvent(events) {
 async function fetchEvents() {
     try {
         const r = await fetch('/viewer/events');
-        if (!r.ok) {
-            throw new Error(`HTTP error! status: ${r.status}`);
+        if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+
+        events = await r.json();
+
+        const imgContainer = document.getElementById('active-event-image');
+        const descContainer = document.getElementById('active-event-description');
+
+        if (imgContainer && descContainer) {
+            displayActiveEvent(events);
         }
 
-        events = await r.json(); // Сохраняем события в глобальную переменную
-        displayActiveEvent(events);
-
-        // Также обновляем отображение игрока при изменении событий
-        renderActivePlayer();
+        return events; // Возвращаем события для цепочки промисов
     } catch (error) {
         console.error('Error fetching events:', error);
-        const container = document.getElementById('active-event-container');
-        container.innerHTML = `
-            <div class="no-active-event">
-                ⚠️ Не удалось загрузить события
-            </div>
-        `;
+        events = []; // Сбрасываем на пустой массив
+        return [];
     }
 }
 
@@ -283,29 +282,30 @@ function connectWebSocket() {
             case 'team_created':
             case 'teams_reset':
             case 'world_reset':
-                console.log('[WebSocket] Teams data changed, refreshing...');
                 fetchTeams();
-                break;
-            case 'events_updated':
                 fetchPlayers();
-                fetchGameRound();
                 break;
+
+            case 'events_updated':
             case 'event_created':
             case 'event_deleted':
             case 'event_status_changed':
             case 'event_changed':
             case 'events_reset':
+                // Сначала обновляем события, потом рендерим
+                fetchEvents().then(() => {
+                    fetchGameRound();
+                    fetchPlayers();
+                });
+                break;
+
             case 'player_moved':
-                console.log('[WebSocket] Players data changed, refreshing...');
                 fetchPlayers();
-                fetchEvents();
+                fetchEvents().then(() => {
+                    fetchGameRound();
+                });
                 break;
-            case 'world_reset':
-                console.log('[WebSocket] Events data changed, refreshing...');
-                fetchEvents();
-                fetchPlayers();
-                fetchGameRound();
-                break;
+
             case 'connected':
                 console.log('[WebSocket] Connected to server');
                 break;
@@ -474,10 +474,12 @@ async function fetchPlayers() {
         players = await res.json();
         if (!Array.isArray(players)) players = [];
 
-        // Получаем следующего игрока
+        let nextPlayer = null;
         try {
             const r = await fetch('/api/players/next', { method: "GET" });
-            nextPlayer = await r.json();
+            if (r.ok) {
+                nextPlayer = await r.json();
+            }
         } catch (err) {
             console.error("[App] Error fetching next player:", err);
             nextPlayer = null;
@@ -487,52 +489,63 @@ async function fetchPlayers() {
     } catch (err) {
         console.error('Ошибка загрузки игроков:', err);
         players = [];
+        renderActivePlayer([], null);
     }
 }
 
 function renderGameRound(round) {
     const container = document.getElementById('game-round');
+    if (!container) return;
 
-    container.innerHTML = `
-        <span class="game-round-desc">
-            Раунд: 
-            <span class="game-round">${round.current_round}</span>
-        </span> 
-    `;
-}
-
-function renderActivePlayer(player, nextPlayer) {
-    const container = document.getElementById('active-player');
-    const currentPlayer = players.find(p => p.is_current);
-    const hasActiveInitEvent = events && events.some(e => e.current && e.init);
+    // Используем глобальную переменную events
+    const hasActiveInitEvent = events && Array.isArray(events) && events.some(e => e.current && e.init);
 
     if (hasActiveInitEvent) {
+        container.innerHTML = ``;
+    } else if (round && round.current_round !== undefined) {
         container.innerHTML = `
-            <span class="active-player-desc">
-                Всем игрокам приготовится!
-            </span> 
-        `;
-    } else if (currentPlayer) {
-        container.innerHTML = `
-            <span class="active-player-desc">
-                Сейчас ходит: 
-                <span class="active-player">${currentPlayer.name}</span>
-            </span> 
-                    <p/>
-            <span class="active-player-desc">
-                Следующий ходит: 
-                <span class="active-player">${nextPlayer.name}</span>
-            </span>  
-        `;
+      <span class="game-round-desc">
+        Раунд: <span class="game-round">${round.current_round}</span>
+      </span>`;
     } else {
-        container.innerHTML = `
-            <span class="active-player-desc">
-                Нет активного игрока
-            </span> 
-        `;
+        container.innerHTML = `<span class="game-round-desc">Загрузка раунда...</span>`;
     }
 }
 
+function renderActivePlayer(players, nextPlayer) {
+    const container = document.getElementById('active-player');
+    if (!container) return;
+
+    // Используем глобальную переменную events
+    const hasActiveInitEvent = events && Array.isArray(events) && events.some(e => e.current && e.init);
+
+    if (hasActiveInitEvent) {
+        container.innerHTML = `<span class="active-player-desc">Всем игрокам приготовится!</span>`;
+        return;
+    }
+
+    // Если нет активного init события, показываем обычную информацию об игроках
+    const currentPlayer = players && Array.isArray(players) ? players.find(p => p.is_current) : null;
+
+    if (currentPlayer) {
+        let nextPlayerHtml = '';
+        if (nextPlayer && nextPlayer.name) {
+            nextPlayerHtml = `
+        <br/>
+        <span class="active-player-desc">
+          Следующий: <span class="active-player">${nextPlayer.name}</span>
+        </span>`;
+        }
+
+        container.innerHTML = `
+      <span class="active-player-desc">
+        Сейчас ходит: <span class="active-player">${currentPlayer.name}</span>
+      </span>
+      ${nextPlayerHtml}`;
+    } else {
+        container.innerHTML = `<span class="active-player-desc">Нет активного игрока</span>`;
+    }
+}
 
 window.onload = function() {
     console.log("[App] Initializing client...");

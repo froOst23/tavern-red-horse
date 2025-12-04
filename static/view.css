@@ -190,6 +190,11 @@ body {
     margin-bottom: 0.5vh;
 }
 
+.game-round-desc-hidden,
+.active-player-desc-hidden {
+    color: #120c0c;
+}
+
 .game-round-desc,
 .active-player-desc {
     font-size: 19px;

@@ -203,36 +203,53 @@ func (a *App) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		a.Log.Error("Invalid event id", "error", err)
-		http.Error(w, "invalid event id", http.StatusBadRequest)
+		http.Error(w, "Invalid event id", http.StatusBadRequest)
 		return
 	}
 
 	var body struct {
-		Completed bool `json:"completed"`
+		Title         *string `json:"title"`
+		Description   *string `json:"description"`
+		Type          *string `json:"type"`
+		Difficult     *string `json:"difficult"`
+		VictoryEffect *string `json:"victory_effect"`
+		DefeatEffect  *string `json:"defeat_effect"`
+		Requirement   *string `json:"requirement"`
+		Init          *bool   `json:"init"`
 	}
+
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		a.Log.Error("Failed to decode body", "error", err)
 		http.Error(w, "Failed to decode body", http.StatusBadRequest)
 		return
 	}
 
-	_, err = a.DB.Exec(r.Context(), `
-        UPDATE events SET used=$1 WHERE id=$2
-    `, body.Completed, id)
+	_, err = a.DB.Exec(
+		r.Context(),
+		`UPDATE events SET
+            title = COALESCE($1, title),
+            description = COALESCE($2, description),
+            type = COALESCE($3, type),
+            difficult = COALESCE($4, difficult),
+            victory_effect = COALESCE($5, victory_effect),
+            defeat_effect = COALESCE($6, defeat_effect),
+            requirement = COALESCE($7, requirement),
+            init = COALESCE($8, init)
+         WHERE id = $9`,
+		body.Title,
+		body.Description,
+		body.Type,
+		body.Difficult,
+		body.VictoryEffect,
+		body.DefeatEffect,
+		body.Requirement,
+		body.Init,
+		id,
+	)
+
 	if err != nil {
-		a.Log.Error("Failed to update event", "error", err)
-		http.Error(w, "failed to update event: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to update event: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	a.broadcast(map[string]interface{}{
-		"type": "event_status_changed",
-		"data": map[string]interface{}{
-			"id":   id,
-			"used": body.Completed,
-		},
-	})
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -353,25 +370,19 @@ func (a *App) SwitchEvent(w http.ResponseWriter, r *http.Request) {
 					)
 					SELECT id, title, description, 
 						   type, image_path, used, 
-						   init, created_at 
-					FROM events 
-					WHERE type = 'Азартная игра' 
+						   init, created_at
+					FROM events
+					WHERE type = 'Азартная игра'
 					  AND used = false
-					  AND (
-						  -- Условие 1: если есть использованные азартные игры, ищем "Бирпонг"
-						  (title = 'Бирпонг' AND (SELECT exists_used FROM has_used_gambling))
-						  OR
-						  -- Условие 2: если нет использованных или "Бирпонг" не найден, берём любую
-						  (NOT (SELECT exists_used FROM has_used_gambling))
-					  )
-					ORDER BY 
-						-- Приоритет для "Бирпонг", если есть использованные игры
+					ORDER BY
+						-- Если были использованные азартные игры, Бирпонг — приоритет
 						CASE 
-							WHEN (SELECT exists_used FROM has_used_gambling) AND title = 'Бирпонг' THEN 1
+							WHEN (SELECT exists_used FROM has_used_gambling) 
+								 AND title = 'Бирпонг' THEN 1
 							ELSE 2
 						END,
 						RANDOM()
-					LIMIT 1`).
+					LIMIT 1;`).
 				Scan(
 					&nextEvent.ID,
 					&nextEvent.Title,

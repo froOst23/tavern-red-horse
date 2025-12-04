@@ -235,12 +235,20 @@ function renderActivePlayer(player, nextPlayer) {
 
 function renderGameRound(round) {
     const container = document.getElementById('game-round');
+    const hasActiveInitEvent = events && events.some(e => e.current && e.init);
 
-    container.innerHTML = `
-        <span class="active-player">
-            Раунд: ${round.current_round}
-        </span> 
-    `;
+    if (hasActiveInitEvent) {
+        container.innerHTML = ``;
+    } else {
+        container.innerHTML = `
+            <span class="active-player">
+                Раунд: ${round.current_round}
+            </span> 
+        `;
+    }
+
+
+
 }
 
 function renderTeams(teams) {
@@ -1028,7 +1036,7 @@ async function saveEventChanges(eventId, currentEvent) {
         }
 
         // Обновляем данные события
-        const updateRes = await fetch(`/api/events/${eventId}`, {
+        const updateRes = await fetch(`/api/events/${eventId}/status`, {
             method: 'PUT',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(updateData)
